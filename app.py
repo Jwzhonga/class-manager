@@ -636,11 +636,14 @@ def semester_set():
 
 @app.route('/semester/add', methods=['POST'])
 def semester_add():
-    name = request.form.get('name', '').strip()
+    start_year = request.form.get('start_year', '').strip()
+    sem_num = request.form.get('semester_num', '1')
     start = request.form.get('start_date', '')
     end = request.form.get('end_date', '')
-    if name and start and end:
+    if start_year and start and end:
         try:
+            end_year = int(start_year) + 1
+            name = f'{start_year}-{end_year}学年度第{sem_num}学期'
             s = Semester(name=name, start_date=date.fromisoformat(start),
                          end_date=date.fromisoformat(end), is_current=False)
             db.session.add(s)

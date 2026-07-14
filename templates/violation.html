@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-clipboard-list"></i> 违纪记录</h4>
+
+<div class="d-flex justify-content-between mb-3">
+    <div class="d-flex gap-2 align-items-center">
+        <span class="badge bg-secondary">共 {{ stats.total }} 条</span>
+        {% for d, c in stats.days_dist.items()|sort %}
+        <span class="badge bg-warning text-dark">{{ d }}天: {{ c }}条</span>
+        {% endfor %}
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/export/violations" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-export"></i> 导出违纪记录</a>
+        <a href="/export/violation-stats" class="btn btn-sm btn-outline-info"><i class="fas fa-chart-bar"></i> 导出违纪统计</a>
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal"><i class="fas fa-plus"></i> 添加违纪记录</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm">
+                <thead>
+                    <tr>
+                        <th>#</th><th>姓名</th><th>日期</th><th>违纪事由</th><th>反省天数</th><th>反省期间</th><th>备注</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ r.student.name }}</strong></td>
+                        <td>{{ r.date.isoformat() }}</td>
+                        <td>{{ r.reason }}</td>
+                        <td><span class="badge bg-warning text-dark">{{ r.reflection_days }}天</span></td>
+                        <td><small>{{ r.reflection_start.isoformat() if r.reflection_start }} ~ {{ r.reflection_end.isoformat() if r.reflection_end }}</small></td>
+                        <td><small class="text-muted">{{ r.notes or '' }}</small></td>
+                        <td>
+                            <a href="/violation/{{ r.id }}/edit" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
+                            <a href="/violation/{{ r.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除？')"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">暂无违纪记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 添加弹窗 -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" action="/violation/add">
+            <div class="modal-header"><h5 class="modal-title">添加违纪记录</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">学生</label>
+                    <select name="student_id" class="form-select" required>
+                        <option value="">选择学生</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}">{{ s.name }} ({{ s.class_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">日期</label>
+                    <input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">违纪事由</label>
+                    <textarea name="reason" class="form-control" rows="2" required></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">反省时长</label>
+                    <select name="reflection_days" class="form-select">
+                        {% for d in range(1, 16) %}
+                        <option value="{{ d }}" {% if d == 3 %}selected{% endif %}>{{ d }}天</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">备注</label>
+                    <textarea name="notes" class="form-control" rows="1"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-sm btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

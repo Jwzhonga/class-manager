@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-gavel"></i> 学生处分管理
+    <small class="ms-2">
+        <form method="get" action="/export/discipline" class="d-inline-block">
+            <input type="hidden" name="format" value="excel">
+            <input type="text" name="student" placeholder="姓名" class="form-control form-control-sm d-inline-block" style="width:80px">
+            <input type="date" name="start" class="form-control form-control-sm d-inline-block" style="width:auto">
+            <input type="date" name="end" class="form-control form-control-sm d-inline-block" style="width:auto">
+            <button type="submit" class="btn btn-sm btn-outline-success">筛选导出</button>
+            <a href="/export/discipline?format=pdf" class="btn btn-sm btn-outline-danger">PDF</a>
+        </form>
+    </small>
+</h4>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header">添加处分记录</div>
+            <div class="card-body">
+                <form method="post" action="/discipline/add" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <label class="form-label">学生</label>
+                        <select name="student_id" class="form-select form-select-sm" required>
+                            <option value="">请选择学生</option>
+                            {% for s in students %}
+                            <option value="{{ s.id }}">{{ s.name }}（{{ s.gender or '' }}）</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">处分日期（何时）</label>
+                        <input type="date" name="incident_date" class="form-control form-control-sm" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">地点（何地）</label>
+                        <input type="text" name="location" class="form-control form-control-sm" placeholder="如：教室、实训车间">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">事由（何事）</label>
+                        <textarea name="reason" class="form-control form-control-sm" rows="2" placeholder="违纪行为描述" required></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">处分决定（何种处分）</label>
+                        <input type="text" name="punishment" class="form-control form-control-sm" placeholder="如：警告、记过、留校察看" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">处分期限</label>
+                        <select name="expiry_preset" class="form-select form-select-sm mb-1" onchange="toggleExpiry(this)">
+                            <option value="">不设期限</option>
+                            <option value="1m">一个月</option>
+                            <option value="3m">三个月</option>
+                            <option value="6m">半年</option>
+                            <option value="1y">一年</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                        <input type="date" name="expiry_date" class="form-control form-control-sm" style="display:none">
+                        <small class="text-muted">自处分日期起算</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">处分通知照片（可多选）</label>
+                        <input type="file" name="image_notification" class="form-control form-control-sm" accept="image/*" multiple>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">处分告知书照片（可多选）</label>
+                        <input type="file" name="image_letter" class="form-control form-control-sm" accept="image/*" multiple>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">备注</label>
+                        <textarea name="notes" class="form-control form-control-sm" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-plus"></i> 添加处分</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>处分记录列表</span>
+                <a href="/export/discipline?format=excel" class="btn btn-sm btn-outline-success"><i class="fas fa-file-excel"></i> 导出Excel</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:500px;overflow-y:auto">
+                    <table class="table table-sm mb-0 table-resizable table-sortable" id="discipline_table">
+                        <thead>
+                            <tr>
+                                <th>姓名</th><th>性别</th><th>日期</th><th>地点</th><th>事由</th><th>处分</th><th>到期</th><th>凭证</th><th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr>
+                                <td><strong>{{ r.student.name }}</strong></td>
+                                <td>{{ r.student.gender or '' }}</td>
+                                <td>{{ r.incident_date }}</td>
+                                <td><small>{{ r.location }}</small></td>
+                                <td><small>{{ r.reason[:30] }}{% if r.reason|length > 30 %}…{% endif %}</small></td>
+                                <td><span class="badge bg-danger">{{ r.punishment }}</span></td>
+                                <td>{% if r.expiry_date %}{{ r.expiry_date }}{% else %}-{% endif %}</td>
+                                <td>
+                                    {% if r.image_notification %}
+                                    {% set notif_imgs = r.image_notification|from_json %}
+                                    {% for img in notif_imgs %}
+                                    <a href="/static/{{ img }}" target="_blank" title="通知图{{ loop.index }}">
+                                        <i class="fas fa-file-image text-primary"></i>
+                                    </a>
+                                    {% endfor %}
+                                    {% endif %}
+                                    {% if r.image_letter %}
+                                    {% set letter_imgs = r.image_letter|from_json %}
+                                    {% for img in letter_imgs %}
+                                    <a href="/static/{{ img }}" target="_blank" title="告知书图{{ loop.index }}">
+                                        <i class="fas fa-file-image text-success ms-1"></i>
+                                    </a>
+                                    {% endfor %}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/discipline/{{ r.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除此处分记录？')">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editDiscipline({{ r.id }}, '{{ r.student.name }}', '{{ r.incident_date }}', '{{ r.location|e }}', '{{ r.reason|e }}', '{{ r.punishment|e }}', '{{ r.notes|e }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="9" class="text-center text-muted">暂无处分记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- PDF导出 -->
+        <div class="mt-2 text-end">
+            <a href="/export/discipline?format=pdf" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> 导出PDF</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleExpiry(sel) {
+    var dateInput = document.querySelector('input[name="expiry_date"]');
+    if (sel.value === 'custom') {
+        dateInput.style.display = 'block';
+    } else {
+        dateInput.style.display = 'none';
+        dateInput.value = '';
+    }
+}
+function editDiscipline(id, name, date, location, reason, punishment, notes) {
+    document.getElementById('edit_id').value = id;
+    document.getElementById('edit_incident_date').value = date;
+    document.getElementById('edit_location').value = location;
+    document.getElementById('edit_reason').value = reason;
+    document.getElementById('edit_punishment').value = punishment;
+    document.getElementById('edit_notes').value = notes;
+    document.getElementById('editStudentName').textContent = name;
+    new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+</script>
+
+<!-- 编辑弹窗 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="id" id="edit_id">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑处分 - <span id="editStudentName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">处分日期</label>
+                    <input type="date" name="incident_date" id="edit_incident_date" class="form-control form-control-sm" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">地点</label>
+                    <input type="text" name="location" id="edit_location" class="form-control form-control-sm">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">事由</label>
+                    <textarea name="reason" id="edit_reason" class="form-control form-control-sm" rows="2" required></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">处分决定</label>
+                    <input type="text" name="punishment" id="edit_punishment" class="form-control form-control-sm" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">处分期限</label>
+                    <select name="expiry_preset" class="form-select form-select-sm mb-1" onchange="toggleExpiry(this)">
+                        <option value="">不设期限</option>
+                        <option value="1m">一个月</option>
+                        <option value="3m">三个月</option>
+                        <option value="6m">半年</option>
+                        <option value="1y">一年</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                    <input type="date" name="expiry_date" class="form-control form-control-sm" style="display:none">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">更换通知照片（可选）</label>
+                    <input type="file" name="image_notification" class="form-control form-control-sm" accept="image/*">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">更换告知书照片（可选）</label>
+                    <input type="file" name="image_letter" class="form-control form-control-sm" accept="image/*">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">备注</label>
+                    <textarea name="notes" id="edit_notes" class="form-control form-control-sm" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-primary btn-sm" formaction="/discipline/edit">保存修改</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-calendar-week"></i> 考勤周视图
+    <small class="ms-2"><a href="/export/attendance?format=excel&detail=1" class="btn btn-sm btn-outline-success">明细Excel</a></small>
+</h4>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <a href="/attendance/weekly?offset={{ week_offset-1 }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-chevron-left"></i> 上一周</a>
+        {% if week_offset != 0 %}<a href="/attendance/weekly" class="btn btn-sm btn-outline-secondary">本周</a>{% endif %}
+        <a href="/attendance/weekly?offset={{ week_offset+1 }}" class="btn btn-sm btn-outline-secondary">下一周 <i class="fas fa-chevron-right"></i></a>
+    </div>
+    <span>第{{ monday.isocalendar()[1] }}周（{{ monday }} ~ {{ sunday }}）</span>
+    <div>
+        <a href="/attendance" class="btn btn-sm btn-outline-primary"><i class="fas fa-list"></i> 日考勤</a>
+        <a href="/attendance/stats" class="btn btn-sm btn-outline-info"><i class="fas fa-chart-bar"></i> 统计</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-bordered table-sm" style="min-width:900px">
+        <thead>
+            <tr>
+                <th style="width:100px">姓名</th>
+                {% for i in range(7) %}
+                <th class="text-center {% if week_dates[i].isoweekday() >= 6 %}text-muted{% endif %}">
+                    {{ week_names[i] }}<br><small>{{ week_dates[i].strftime('%m-%d') }}</small>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td><strong>{{ s.student.name }}</strong></td>
+                {% for i in range(7) %}
+                {% set d = week_dates[i].isoformat() %}
+                {% set rec = s.records.get(d) %}
+                <td class="text-center" style="{% if rec and rec.status == 'present' %}background:#f6ffed{% elif rec and rec.status == 'truant' %}background:#fff1f0{% elif rec and rec.status == 'sick' %}background:#fffbe6{% elif rec and rec.status == 'personal' %}background:#e6f7ff{% elif rec and rec.status == 'late' %}background:#fff7e6{% endif %}">
+                    {% if rec %}
+                        {% if rec.status == 'present' %}<span class="text-success">✓</span>
+                        {% elif rec.status == 'truant' %}<span class="text-danger">旷{{ rec.period|popcount }}节</span>
+                        {% elif rec.status == 'sick' %}<span class="text-warning">病{{ rec.period|popcount }}节</span>
+                        {% elif rec.status == 'personal' %}<span class="text-primary">事{{ rec.period|popcount }}节</span>
+                        {% elif rec.status == 'late' %}<span class="text-orange">迟{{ rec.period|popcount }}节</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center text-muted">暂无学生</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-table"></i> 班级课表</h4>
+
+<div class="row g-3">
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span>课表</span>
+                <div>
+                    <a href="/export/schedule?format=excel" class="btn btn-sm btn-outline-success"><i class="fas fa-file-excel"></i> Excel</a>
+                    <a href="/export/schedule?format=pdf" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0 schedule-grid table-resizable" id="schedule_table">
+                        <thead>
+                            <tr>
+                                <th style="width:60px">节次</th>
+                                {% for d in range(5) %}
+                                <th>{{ day_names[d] }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in range(1, max_period + 1) %}
+                            <tr>
+                                <td class="text-center">
+                                    <small>第{{ p }}节</small>
+                                    {% if period_times and p in period_times %}
+                                    <br><small class="text-muted">{{ period_times[p] }}</small>
+                                    {% endif %}
+                                </td>
+                                {% for d in range(5) %}
+                                <td style="{% for s in week[d] if s.period == p %}background:{{ course_color.get(s.course_name, '#fff') }}{% endfor %}"
+                                    {% for s in week[d] if s.period == p %}data-schedule-id="{{ s.id }}" data-course-name="{{ s.course_name }}"{% endfor %}>
+                                    {% for s in week[d] if s.period == p %}
+                                    <div class="drag-item">
+                                        {{ s.course_name }}
+                                        {% if s.teacher %}<br><small>{{ s.teacher }}</small>{% endif %}
+                                        {% if s.location %}<br><small class="text-muted">{{ s.location }}</small>{% endif %}
+                                        {% if s.is_training %}<br><span class="badge bg-info">实训</span>{% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <!-- 上传课表 -->
+        <div class="card">
+            <div class="card-header">上传课表识别</div>
+            <div class="card-body">
+                <p class="small text-muted">支持课表截图/照片，也支持 .xls/.xlsx 文件</p>
+                <form method="post" action="/schedule/upload" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <input type="file" name="schedule_image" class="form-control form-control-sm" accept="image/*,.xls,.xlsx" required>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                        <i class="fas fa-upload"></i> 上传并识别
+                    </button>
+                </form>
+                <div class="mt-2 small text-muted">
+                    <i class="fas fa-info-circle"></i> 识别后自动填入课表，可拖拽调整
+                </div>
+            </div>
+        </div>
+
+        <!-- 已上传的课表图片 -->
+        {% if schedule_images %}
+        <div class="card mt-3">
+            <div class="card-header">已上传的课表</div>
+            <div class="card-body p-2">
+                {% for img in schedule_images %}
+                <div class="mb-2">
+                    <a href="/static/{{ img.image_path }}" target="_blank">
+                        <img src="/static/{{ img.image_path }}" class="img-fluid img-thumbnail" style="max-height:200px">
+                    </a>
+                    <details class="mt-1">
+                        <summary class="small text-muted">查看识别文字</summary>
+                        <pre class="small mt-1" style="font-size:10px;max-height:150px;overflow-y:auto;background:#f5f5f5;padding:4px;border-radius:4px">{{ img.raw_text[:500] }}{% if img.raw_text|length > 500 %}...{% endif %}</pre>
+                        {% if schedule_ocr and schedule_ocr[loop.index0].courses %}
+                    <div class="mt-1 p-2 bg-light rounded">
+                        <div class="small fw-bold">识别到的课程：</div>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for c in schedule_ocr[loop.index0].courses %}
+                            {% if c|length >= 4 and '榆中' not in c and '课程表' not in c and '职业技术学校' not in c %}
+                            <span class="badge bg-primary" style="cursor:pointer" title="点击填入课程名"
+                                  onclick="fillCourse(this.textContent)">{{ c[:20] }}{% if c|length > 20 %}…{% endif %}</span>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% if schedule_ocr[loop.index0].teachers %}
+                        <div class="small fw-bold mt-1">教师：</div>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for t in schedule_ocr[loop.index0].teachers %}
+                            <span class="badge bg-success" style="cursor:pointer" title="点击填入教师名"
+                                  onclick="fillTeacher(this.textContent)">{{ t }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    </details>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 添加课程 -->
+        <div class="card mt-3">
+            <div class="card-header">添加课程</div>
+            <div class="card-body">
+                <form method="post" action="/schedule/add" class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label">星期</label>
+                        <select name="day_of_week" class="form-select form-select-sm">
+                            <option value="0">周一</option>
+                            <option value="1">周二</option>
+                            <option value="2">周三</option>
+                            <option value="3">周四</option>
+                            <option value="4">周五</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">节次</label>
+                        <select name="period" class="form-select form-select-sm">
+                            {% for p in range(1, max_period + 1) %}
+                            <option value="{{ p }}">第{{ p }}节</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">课程名称</label>
+                        <input type="text" name="course_name" class="form-control form-control-sm" required placeholder="如：汽车构造">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">教师</label>
+                        <input type="text" name="teacher" class="form-control form-control-sm" placeholder="教师姓名">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">地点</label>
+                        <input type="text" name="location" class="form-control form-control-sm" placeholder="如：实训室A">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_training" class="form-check-input" id="isTraining">
+                            <label class="form-check-label" for="isTraining">实训课</label>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-plus"></i> 添加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fillCourse(name) {
+    var input = document.querySelector('input[name="course_name"]');
+    if (input) input.value = name.trim();
+}
+function fillTeacher(name) {
+    var input = document.querySelector('input[name="teacher"]');
+    if (input) input.value = name.trim();
+}
+
+// ── 课表拖拽 ──
+document.addEventListener('DOMContentLoaded', function() {
+    // 为所有有课程的单元格添加拖拽
+    document.querySelectorAll('.schedule-grid td').forEach(function(td) {
+        if (td.querySelector('.drag-item')) {
+            td.setAttribute('draggable', 'true');
+            td.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', this.dataset.scheduleId);
+                this.classList.add('dragging');
+            });
+            td.addEventListener('dragend', function(e) {
+                this.classList.remove('dragging');
+            });
+        }
+    });
+    
+    // 所有单元格都可以接收拖放
+    document.querySelectorAll('.schedule-grid td').forEach(function(td) {
+        td.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        });
+        td.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+        td.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            
+            var scheduleId = e.dataTransfer.getData('text/plain');
+            var targetTd = this;
+            
+            // 从目标单元格提取 day_of_week 和 period
+            var ths = document.querySelectorAll('.schedule-grid thead th');
+            var colIndex = -1;
+            for (var ci = 0; ci < targetTd.parentElement.children.length; ci++) {
+                if (targetTd.parentElement.children[ci] === targetTd) {
+                    colIndex = ci;
+                    break;
+                }
+            }
+            // colIndex 0 = 节次列, 1-5 = 周一至周五
+            if (colIndex < 1) return;
+            var newDay = colIndex - 1;
+            
+            // 行号 = period
+            var row = targetTd.parentElement;
+            var rowIndex = row.rowIndex - 1; // 0-indexed, 减去表头
+            var newPeriod = rowIndex + 1;
+            
+            // 发送请求保存
+            fetch('/schedule/move', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: parseInt(scheduleId), day_of_week: newDay, period: newPeriod})
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.ok) location.reload();
+            });
+        });
+    });
+});
+</script>
+<style>
+.schedule-grid td { border-radius: 8px !important; }
+.schedule-grid { border-collapse: separate !important; border-spacing: 3px !important; }
+.schedule-grid td[draggable="true"] { cursor: grab; }
+.schedule-grid td.dragging { opacity: 0.4; }
+.schedule-grid td.drag-over { background: #e6f7ff !important; outline: 2px dashed #1890ff; }
+.schedule-grid td[draggable="true"]:hover { box-shadow: inset 0 0 0 2px rgba(24,144,255,0.3); }
+.schedule-grid td.course-highlight {
+    outline: none !important;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3), 0 4px 10px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.4);
+    transform: scale(1.05);
+    z-index: 10;
+    position: relative;
+    transition: all 0.2s ease;
+}
+.schedule-grid td.course-dim { opacity: 0.4; filter: grayscale(0.5); }
+</style>
+<script>
+// ── 点击课程高亮同名校 ──
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.schedule-grid td[data-course-name]').forEach(function(td) {
+        td.addEventListener('click', function(e) {
+            if (this.classList.contains('dragging')) return;
+            var name = this.dataset.courseName;
+            var active = this.classList.contains('active-course');
+            document.querySelectorAll('.schedule-grid td.course-highlight, .schedule-grid td.course-dim').forEach(function(el) {
+                el.classList.remove('course-highlight', 'course-dim', 'active-course');
+            });
+            if (!active) {
+                document.querySelectorAll('.schedule-grid td[data-course-name]').forEach(function(el) {
+                    if (el.dataset.courseName === name) el.classList.add('course-highlight', 'active-course');
+                    else if (el.dataset.courseName) el.classList.add('course-dim');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

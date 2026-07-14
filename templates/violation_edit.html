@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-edit"></i> 编辑违纪记录</h4>
+<div class="card"><div class="card-body">
+<form method="post" class="row g-3">
+    <div class="col-md-4">
+        <label class="form-label">学生</label>
+        <select name="student_id" class="form-select" required>
+            {% for s in students %}
+            <option value="{{ s.id }}" {% if v.student_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">日期</label>
+        <input type="date" name="date" class="form-control" value="{{ v.date.isoformat() }}">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">反省天数</label>
+        <select name="reflection_days" class="form-select">
+            {% for d in range(1, 16) %}
+            <option value="{{ d }}" {% if v.reflection_days == d %}selected{% endif %}>{{ d }}天</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-12">
+        <label class="form-label">违纪事由</label>
+        <textarea name="reason" class="form-control" rows="2" required>{{ v.reason }}</textarea>
+    </div>
+    <div class="col-md-12">
+        <label class="form-label">备注</label>
+        <textarea name="notes" class="form-control" rows="1">{{ v.notes }}</textarea>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+        <a href="/violation" class="btn btn-outline-secondary">取消</a>
+    </div>
+</form>
+</div></div>
+{% endblock %}

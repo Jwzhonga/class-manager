@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-chart-simple"></i> 实训统计</h4>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between">
+        <span>学生实训完成情况</span>
+        <div>
+            <a href="/export/training?format=excel" class="btn btn-sm btn-outline-success"><i class="fas fa-file-excel"></i> Excel</a>
+            <a href="/export/training?format=pdf" class="btn btn-sm btn-outline-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 table-resizable table-sortable" id="training_stats_table">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        {% for p in projects %}
+                        <th style="min-width:120px">{{ p.name }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in students %}
+                    <tr>
+                        <td><strong>{{ item.student.name }}</strong></td>
+                        {% for p in projects %}
+                        <td>
+                            {% set found = false %}
+                            {% for r in item.records %}
+                            {% if r.project == p.name %}
+                            <span class="{% if r.avg_score >= 90 %}text-success{% elif r.avg_score >= 70 %}text-primary{% else %}text-warning{% endif %}">
+                                <strong>{{ r.avg_score }}</strong>
+                            </span>
+                            <br><small class="text-muted">已完成{{ r.count }}次</small>
+                            {% set found = true %}
+                            {% endif %}
+                            {% endfor %}
+                            {% if not found %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="{{ 2 + projects|length }}" class="text-center text-muted">暂无数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

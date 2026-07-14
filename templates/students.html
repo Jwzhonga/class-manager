@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="page-title mb-0"><i class="fas fa-users"></i> 学生管理</h4>
+    <div class="d-flex gap-2">
+        <a href="/export/special-family" class="btn btn-sm btn-outline-info"><i class="fas fa-file-export"></i> 导出特殊家庭台账</a>
+        <a href="/export/dormitory" class="btn btn-sm btn-outline-secondary"><i class="fas fa-bed"></i> 导出宿舍名单</a>
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="fas fa-file-import"></i> 导入Excel
+        </button>
+        <a href="/students/add" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> 添加学生</a>
+    </div>
+</div>
+
+<!-- 统计卡片（全部可点击） -->
+<div class="row g-2 mb-2">
+    <div class="col-6 col-md-2">
+        <a href="/students" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if not filter_type %}border-primary{% endif %}">
+                <div class="number" style="font-size:20px">{{ stats.total }}</div>
+                <div class="label" style="font-size:11px">学生总数</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=poverty" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'poverty' %}border-danger{% endif %}">
+                <div class="number" style="font-size:20px;color:#ff4d4f">{{ stats.poverty_count }}</div>
+                <div class="label" style="font-size:11px">贫困户</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=boarding" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'boarding' %}border-primary{% endif %}">
+                <div class="number" style="font-size:20px;color:#1890ff">{{ stats.boarding_count }}</div>
+                <div class="label" style="font-size:11px">住校生</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=day" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'day' %}border-success{% endif %}">
+                <div class="number" style="font-size:20px;color:#52c41a">{{ stats.day_count }}</div>
+                <div class="label" style="font-size:11px">通校生</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=minority" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'minority' %}border-primary{% endif %}">
+                <div class="number" style="font-size:20px;color:#722ed1">{{ stats.minority_count }}</div>
+                <div class="label" style="font-size:11px">少数民族</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=agricultural" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'agricultural' %}border-success{% endif %}">
+                <div class="number" style="font-size:20px;color:#fa8c16">{{ stats.agri_count }}</div>
+                <div class="label" style="font-size:11px">农业户口</div>
+            </div>
+        </a>
+    </div>
+</div>
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=non_agricultural" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'non_agricultural' %}border-warning{% endif %}">
+                <div class="number" style="font-size:20px;color:#eb2f96">{{ stats.non_agri_count }}</div>
+                <div class="label" style="font-size:11px">非农业户口</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=special_family" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'special_family' %}border-danger{% endif %}">
+                <div class="number" style="font-size:20px;color:#fa541c">{{ stats.special_family_count }}</div>
+                <div class="label" style="font-size:11px">特殊家庭</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=special_physical" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'special_physical' %}border-info{% endif %}">
+                <div class="number" style="font-size:20px;color:#13c2c2">{{ stats.special_physical_count }}</div>
+                <div class="label" style="font-size:11px">特异体质</div>
+            </div>
+        </a>
+    </div>
+</div>
+
+{% if filter_type == 'special_family' and stats.special_family_types %}
+<div class="row g-2 mb-3">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body p-2">
+                <small class="text-muted"><i class="fas fa-heart"></i> 特殊家庭类型分布</small>
+                <div class="d-flex gap-3 mt-1 flex-wrap">
+                    {% for k, v in stats.special_family_types.items() %}
+                    <div>
+                        <span class="badge bg-warning text-dark" style="font-size:13px;padding:5px 12px">{{ k }}</span>
+                        <span style="font-size:12px;color:#666"> {{ v | join('、') }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if filter_type == 'special_physical' and stats.special_physical_notes %}
+<div class="row g-2 mb-3">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body p-2">
+                <small class="text-muted"><i class="fas fa-ambulance"></i> 特异体质具体情况</small>
+                <div class="table-responsive mt-1">
+                    <table class="table table-sm table-borderless mb-0">
+                        <thead><tr><th>姓名</th><th>特异体质说明</th></tr></thead>
+                        <tbody>
+                            {% for item in stats.special_physical_notes %}
+                            <tr><td>{{ item.name }}</td><td>{{ item.note }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 详细统计行 -->
+<div class="row g-2 mb-3">
+    <!-- 年龄分布 -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body p-2">
+                <small class="text-muted"><i class="fas fa-calendar-alt"></i> 年龄分布（平均{{ stats.avg_age }}岁 最大{{ stats.max_age }} 最小{{ stats.min_age }}）</small>
+                <div class="d-flex gap-2 mt-1 flex-wrap">
+                    <a href="/students?filter=age_range&value=15以下" class="text-decoration-none text-center" style="flex:1;min-width:60px">
+                        <strong>{{ stats.age_ranges['15岁以下'] }}</strong><br><small style="font-size:11px;color:#666">15岁以下</small>
+                    </a>
+                    <a href="/students?filter=age_range&value=16-17" class="text-decoration-none text-center" style="flex:1;min-width:60px">
+                        <strong>{{ stats.age_ranges['16-17岁'] }}</strong><br><small style="font-size:11px;color:#666">16-17岁</small>
+                    </a>
+                    <a href="/students?filter=age_range&value=18-19" class="text-decoration-none text-center" style="flex:1;min-width:60px">
+                        <strong>{{ stats.age_ranges['18-19岁'] }}</strong><br><small style="font-size:11px;color:#666">18-19岁</small>
+                    </a>
+                    <a href="/students?filter=age_range&value=20以上" class="text-decoration-none text-center" style="flex:1;min-width:60px">
+                        <strong>{{ stats.age_ranges['20岁以上'] }}</strong><br><small style="font-size:11px;color:#666">20岁以上</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 户籍地 -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body p-2">
+                <small class="text-muted"><i class="fas fa-map-marker-alt"></i> 户籍地</small>
+                <div class="mt-1" style="font-size:12px">
+                    {% for name, code, count in stats.regions %}
+                    <a href="/students?filter=region&value={{ code }}" class="text-decoration-none">
+                        <span class="badge bg-light text-dark me-1 mb-1">{{ name }} <strong>{{ count }}</strong>人</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if filter_type and stats.display_count != stats.total %}
+<div class="text-muted small mb-2">
+    显示 {{ stats.display_count }} / {{ stats.total }} 名学生
+</div>
+{% endif %}
+
+<!-- 导入弹窗 -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">从Excel导入学生</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/students/import" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <p class="text-muted">支持 .xls 和 .xlsx 格式，文件模板格式：</p>
+                    <ul class="small text-muted">
+                        <li>第1行：标题行（自动跳过）</li>
+                        <li>第2行：子标题（自动跳过）</li>
+                        <li>第3行起：数据行</li>
+                    </ul>
+                    <input type="file" name="file" class="form-control" accept=".xls,.xlsx" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-upload"></i> 导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>性别</th>
+                        <th>班级</th>
+                        <th>身份证号</th>
+                        <th>监护人</th>
+                        <th>家长电话</th>
+                        <th>毕业学校</th>
+                        <th>就读方式</th>
+                        <th>建档立卡</th>
+                        <th>住址</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr>
+                        <td><strong>{{ s.name }}</strong></td>
+                        <td>{{ s.gender }}</td>
+                        <td>{{ s.class_name }}</td>
+                        <td><small>{{ s.id_card }}</small></td>
+                        <td>{{ s.parent_name }}<br><small class="text-muted">{{ s.parent_relation }}</small></td>
+                        <td>{{ s.parent_phone }}</td>
+                        <td><small>{{ s.graduate_school }}</small></td>
+                        <td>{{ s.live_mode }}</td>
+                        <td>{% if s.poverty_status and s.poverty_status != '否' %}<span class="badge bg-warning text-dark">{{ s.poverty_status }}</span>{% else %}否{% endif %}</td>
+                        <td style="white-space:pre-wrap;word-break:break-word;min-width:200px"><small>{{ s.address }}</small></td>
+                        <td style="white-space:nowrap">
+                            <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
+                            <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="11" class="text-center text-muted py-4">还没有学生，点击右上角添加或导入</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer text-muted small">
+        共 {{ students|length }} 名学生
+        {% if filter_type %}<span class="ms-2">（<a href="/students">清除筛选</a>）</span>{% endif %}
+    </div>
+</div>
+{% endblock %}

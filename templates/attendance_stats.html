@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-chart-bar"></i> 考勤统计
+    <small class="ms-2">
+        <a href="/export/attendance?format=excel" class="btn btn-sm btn-outline-success">汇总Excel</a>
+        <a href="/export/attendance?format=excel&detail=1" class="btn btn-sm btn-outline-success">明细Excel</a>
+    </small>
+</h4>
+
+{% if students %}
+<!-- 图表区 -->
+<div class="row g-3 mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">近15天缺勤趋势</div>
+            <div class="card-body">
+                <canvas id="attendanceChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计表 -->
+<div class="card">
+    <div class="card-header">学生考勤汇总</div>
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+            <table class="table table-sm mb-0 table-sortable">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>病假(节)</th>
+                        <th>事假(节)</th>
+                        <th>旷课(节)</th>
+                        <th>迟到(次)</th>
+                        <th>总缺勤</th>
+                        <th>预警</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr class="{% if s.truant_hours >= warn_hours %}table-danger{% endif %}">
+                        <td><strong>{{ s.student.name }}</strong></td>
+                        <td>{{ s.sick_hours }}</td>
+                        <td>{{ s.personal_hours }}</td>
+                        <td>{{ s.truant_hours }}</td>
+                        <td>{{ s.late_count }}</td>
+                        <td><strong>{{ s.total_absent }}</strong></td>
+                        <td>{% if s.truant_hours >= warn_hours %}<span class="badge bg-danger">预警</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('attendanceChart'), {
+    type: 'bar',
+    data: {
+        labels: {{ chart_dates|tojson }},
+        datasets: [
+            { label: '旷课', data: {{ chart_truant|tojson }}, backgroundColor: '#ff4d4f' },
+            { label: '病假', data: {{ chart_sick|tojson }}, backgroundColor: '#faad14' },
+            { label: '事假', data: {{ chart_personal|tojson }}, backgroundColor: '#1890ff' }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+            x: { stacked: true },
+            y: { stacked: true, beginAtZero: true, title: { display: true, text: '缺勤课时' } }
+        }
+    }
+});
+</script>
+{% else %}
+<div class="alert alert-info">暂无考勤数据</div>
+{% endif %}
+{% endblock %}

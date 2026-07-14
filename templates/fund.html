@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-coins"></i> 班费管理</h4>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-4">
+        <div class="stat-card text-center p-2" style="border-left:3px solid #52c41a">
+            <div class="number" style="font-size:20px;color:#52c41a">¥{{ '%.2f'|format(income) }}</div>
+            <div class="label" style="font-size:11px">总收入</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center p-2" style="border-left:3px solid #ff4d4f">
+            <div class="number" style="font-size:20px;color:#ff4d4f">¥{{ '%.2f'|format(expense) }}</div>
+            <div class="label" style="font-size:11px">总支出</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center p-2" style="border-left:3px solid #1890ff">
+            <div class="number" style="font-size:20px;color:#1890ff">¥{{ '%.2f'|format(balance) }}</div>
+            <div class="label" style="font-size:11px">结余</div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mb-3">
+    <div>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#incomeModal"><i class="fas fa-plus"></i> 新增收入</button>
+        <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#expenseModal"><i class="fas fa-minus"></i> 新增支出</button>
+    </div>
+    <a href="/export/fund-xlsx" class="btn btn-sm btn-outline-success"><i class="fas fa-file-excel"></i> 导出明细</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm">
+                <thead>
+                    <tr>
+                        <th>日期</th><th>类型</th><th>金额</th><th>事由</th><th>凭据</th><th>备注</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ r.date.isoformat() }}</td>
+                        <td>{% if r.type == 'income' %}<span class="badge bg-success">收入</span>{% else %}<span class="badge bg-danger">支出</span>{% endif %}</td>
+                        <td><strong>¥{{ '%.2f'|format(r.amount) }}</strong></td>
+                        <td>{{ r.reason }}</td>
+                        <td>{% if r.voucher %}<img src="/static/uploads/{{ r.voucher }}" class="voucher-thumb" onclick="window.open(this.src)" alt="凭据">{% else %}-{% endif %}</td>
+                        <td><small class="text-muted">{{ r.notes or '' }}</small></td>
+                        <td><a href="/fund/{{ r.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除此记录？')"><i class="fas fa-trash"></i></a></td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">暂无班费记录</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 新增收入弹窗 -->
+<div class="modal fade" id="incomeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" action="/fund/add" enctype="multipart/form-data">
+            <div class="modal-header"><h5 class="modal-title">新增收入</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="type" value="income">
+                <div class="mb-2"><label class="form-label">日期</label><input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}"></div>
+                <div class="mb-2"><label class="form-label">金额（元）</label><input type="number" name="amount" class="form-control" step="0.01" required></div>
+                <div class="mb-2"><label class="form-label">来源事由</label><textarea name="reason" class="form-control" rows="2" required></textarea></div>
+                <div class="mb-2"><label class="form-label">凭据图片</label><input type="file" name="voucher" class="form-control" accept="image/*"></div>
+                <div class="mb-2"><label class="form-label">备注</label><textarea name="notes" class="form-control" rows="1"></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-success">保存</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- 新增支出弹窗 -->
+<div class="modal fade" id="expenseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" method="post" action="/fund/add" enctype="multipart/form-data">
+            <div class="modal-header"><h5 class="modal-title">新增支出</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="type" value="expense">
+                <div class="mb-2"><label class="form-label">日期</label><input type="date" name="date" class="form-control" value="{{ now().strftime('%Y-%m-%d') }}"></div>
+                <div class="mb-2"><label class="form-label">金额（元）</label><input type="number" name="amount" class="form-control" step="0.01" required></div>
+                <div class="mb-2"><label class="form-label">支出事由</label><textarea name="reason" class="form-control" rows="2" required></textarea></div>
+                <div class="mb-2"><label class="form-label">凭据图片</label><input type="file" name="voucher" class="form-control" accept="image/*"></div>
+                <div class="mb-2"><label class="form-label">备注</label><textarea name="notes" class="form-control" rows="1"></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="submit" class="btn btn-danger">保存</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

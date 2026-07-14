@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-user-{{ 'edit' if student else 'plus' }}"></i> {{ '编辑' if student else '添加' }}学生</h4>
+<div class="card">
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            <!-- 基本信息 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-info-circle"></i> 基本信息</h6></div>
+            
+            <div class="col-md-3">
+                <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                <input type="text" name="name" class="form-control form-control-sm" value="{{ student.name if student else '' }}" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">性别</label>
+                <select name="gender" class="form-select form-select-sm">
+                    <option value="">选择</option>
+                    <option value="男" {% if student and student.gender == '男' %}selected{% endif %}>男</option>
+                    <option value="女" {% if student and student.gender == '女' %}selected{% endif %}>女</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">身份证号</label>
+                <input type="text" name="id_card" class="form-control form-control-sm" value="{{ student.id_card if student else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">班级</label>
+                <input type="text" name="class_name" class="form-control form-control-sm" value="{{ student.class_name if student else '' }}" placeholder="如：24新能源1班">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">专业</label>
+                <input type="text" name="major" class="form-control form-control-sm" value="{{ student.major if student else '' }}" placeholder="如：新能源汽车维修">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">民族</label>
+                <input type="text" name="ethnic" class="form-control form-control-sm" value="{{ student.ethnic if student else '' }}" placeholder="如：汉族">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">政治面貌</label>
+                <input type="text" name="political_status" class="form-control form-control-sm" value="{{ student.political_status if student else '' }}" placeholder="如：团员">
+            </div>
+            
+            <!-- 联系信息 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-phone"></i> 联系信息</h6></div>
+            
+            <div class="col-md-3">
+                <label class="form-label">本人电话</label>
+                <input type="text" name="phone" class="form-control form-control-sm" value="{{ student.phone if student else '' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">监护人姓名</label>
+                <input type="text" name="parent_name" class="form-control form-control-sm" value="{{ student.parent_name if student else '' }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">关系</label>
+                <select name="parent_relation" class="form-select form-select-sm">
+                    <option value="">选择</option>
+                    <option value="父亲" {% if student and student.parent_relation == '父亲' %}selected{% endif %}>父亲</option>
+                    <option value="母亲" {% if student and student.parent_relation == '母亲' %}selected{% endif %}>母亲</option>
+                    <option value="祖父" {% if student and student.parent_relation == '祖父' %}selected{% endif %}>祖父</option>
+                    <option value="祖母" {% if student and student.parent_relation == '祖母' %}selected{% endif %}>祖母</option>
+                    <option value="姑姑" {% if student and student.parent_relation == '姑姑' %}selected{% endif %}>姑姑</option>
+                    <option value="其他" {% if student and student.parent_relation == '其他' %}selected{% endif %}>其他</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">家长电话</label>
+                <input type="text" name="parent_phone" class="form-control form-control-sm" value="{{ student.parent_phone if student else '' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">毕业学校</label>
+                <input type="text" name="graduate_school" class="form-control form-control-sm" value="{{ student.graduate_school if student else '' }}">
+            </div>
+            
+            <!-- 住址与住宿 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-home"></i> 住址与住宿</h6></div>
+            
+            <div class="col-md-3">
+                <label class="form-label">就读方式</label>
+                <select name="live_mode" class="form-select form-select-sm" onchange="toggleDormitory(this)">
+                    <option value="">选择</option>
+                    <option value="住校" {% if student and student.live_mode == '住校' %}selected{% endif %}>住校</option>
+                    <option value="走读" {% if student and student.live_mode == '走读' %}selected{% endif %}>走读</option>
+                </select>
+            </div>
+            <div class="col-md-2" id="dormitoryField" style="display:{% if student and student.live_mode == '住校' %}block{% else %}none{% endif %}">
+                <label class="form-label">宿舍号</label>
+                <input type="text" name="dormitory" class="form-control form-control-sm" value="{{ student.dormitory if student else '' }}" placeholder="如：3#205">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">户口性质</label>
+                <select name="residence_type" class="form-select form-select-sm">
+                    <option value="">选择</option>
+                    <option value="农业户口" {% if student and student.residence_type == '农业户口' %}selected{% endif %}>农业户口</option>
+                    <option value="非农业户口" {% if student and student.residence_type == '非农业户口' %}selected{% endif %}>非农业户口</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">建档立卡</label>
+                <select name="poverty_status" class="form-select form-select-sm">
+                    <option value="">选择</option>
+                    <option value="贫困户" {% if student and student.poverty_status == '贫困户' %}selected{% endif %}>贫困户</option>
+                    <option value="否" {% if student and student.poverty_status == '否' %}selected{% endif %}>否</option>
+                </select>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">家庭住址</label>
+                <input type="text" name="address" class="form-control form-control-sm" value="{{ student.address if student else '' }}" placeholder="省/市/县/乡镇/村/门牌号">
+            </div>
+            
+            <!-- 特殊家庭 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-heart"></i> 特殊家庭情况</h6></div>
+            <div class="col-12">
+                {% set sf = (student.special_family or '').split(',') %}
+                <div class="d-flex flex-wrap gap-3">
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="单亲" {% if '单亲' in sf %}checked{% endif %}> 单亲</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="留守" {% if '留守' in sf %}checked{% endif %}> 留守</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="离异" {% if '离异' in sf %}checked{% endif %}> 离异</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="孤儿" {% if '孤儿' in sf %}checked{% endif %}> 孤儿</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="残疾" {% if '残疾' in sf %}checked{% endif %}> 残疾</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="贫困" {% if '贫困' in sf %}checked{% endif %}> 贫困</label>
+                    <label class="form-check-label"><input type="checkbox" name="special_family" value="其他" {% if '其他' in sf %}checked{% endif %}> 其他</label>
+                </div>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">特殊情况说明</label>
+                <textarea name="special_family_note" class="form-control" rows="2">{{ student.special_family_note if student else '' }}</textarea>
+            </div>
+            
+            <!-- 特异体质 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-ambulance"></i> 特异体质</h6></div>
+            <div class="col-md-3">
+                <select name="special_physical" class="form-select form-select-sm" onchange="toggleSpecialPhysical(this)">
+                    <option value="">选择</option>
+                    <option value="是" {% if student and student.special_physical == '是' %}selected{% endif %}>是</option>
+                    <option value="否" {% if student and student.special_physical == '否' %}selected{% endif %}>否</option>
+                </select>
+            </div>
+            <div class="col-md-9" id="specialPhysicalNote" style="display:{% if student and student.special_physical == '是' %}block{% else %}none{% endif %}">
+                <label class="form-label">特异体质说明</label>
+                <input type="text" name="special_physical_note" class="form-control form-control-sm" value="{{ student.special_physical_note if student else '' }}" placeholder="如：过敏性哮喘、心脏病等">
+            </div>
+            
+            <!-- 备注 -->
+            <div class="col-12"><hr class="my-1"><h6 class="text-primary"><i class="fas fa-sticky-note"></i> 备注</h6></div>
+            <div class="col-md-12">
+                <textarea name="remark" class="form-control" rows="2">{{ student.remark if student else '' }}</textarea>
+            </div>
+            
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存</button>
+                <a href="/students" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleDormitory(sel) {
+    document.getElementById('dormitoryField').style.display = sel.value === '住校' ? 'block' : 'none';
+}
+function toggleSpecialPhysical(sel) {
+    document.getElementById('specialPhysicalNote').style.display = sel.value === '是' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

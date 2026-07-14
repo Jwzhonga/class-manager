@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-calendar-check"></i> 每日考勤</h4>
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>考勤登记</span>
+                <div>
+                    <form method="get" action="/export/attendance" class="d-inline-block me-2">
+                        <input type="hidden" name="format" value="excel">
+                        <input type="hidden" name="detail" value="1">
+                        <input type="text" name="student" placeholder="学生姓名" class="form-control form-control-sm d-inline-block" style="width:100px">
+                        <input type="date" name="start" class="form-control form-control-sm d-inline-block" style="width:auto">
+                        <input type="date" name="end" class="form-control form-control-sm d-inline-block" style="width:auto">
+                        <button type="submit" class="btn btn-sm btn-outline-success">筛选导出</button>
+                    </form>
+                    <div class="btn-group btn-group-sm me-2">
+                        <a href="/export/attendance?format=excel" class="btn btn-outline-success">汇总</a>
+                        <a href="/export/attendance?format=excel&detail=1" class="btn btn-outline-success">明细</a>
+                    </div>
+                    <form method="get" action="/attendance" class="d-inline">
+                        <input type="date" name="date" class="form-control form-control-sm d-inline-block" style="width:auto" value="{{ query_date }}" onchange="this.form.submit()">
+                    </form>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/attendance" enctype="multipart/form-data">
+                    <input type="hidden" name="date" value="{{ query_date }}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="setAllPresent()"><i class="fas fa-check-double"></i> 一键全勤</button>
+                            <button type="submit" class="btn btn-primary btn-sm ms-1"><i class="fas fa-save"></i> 保存考勤</button>
+                        </div>
+                        <small class="text-muted">支持 jpg/png/gif/webp</small>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-resizable table-sortable" id="attendance_table">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px">#</th>
+                                    <th>姓名</th>
+                                    <th style="width:120px">状态</th>
+                                    <th style="width:140px">缺勤课时</th>
+                                    <th>原因说明</th>
+                                    <th style="width:160px">上传凭证</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in students %}
+                                {% set rec = existing_map.get(s.id) %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td><strong>{{ s.name }}</strong></td>
+                                    <td>
+                                        <select name="status_{{ s.id }}" class="form-select form-select-sm status-select" onchange="toggleReason(this)">
+                                            <option value="present" {% if rec and rec.status == 'present' %}selected{% endif %}>出勤</option>
+                                            <option value="late" {% if rec and rec.status == 'late' %}selected{% endif %}>迟到</option>
+                                            <option value="sick" {% if rec and rec.status == 'sick' %}selected{% endif %}>病假</option>
+                                            <option value="personal" {% if rec and rec.status == 'personal' %}selected{% endif %}>事假</option>
+                                            <option value="truant" {% if rec and rec.status == 'truant' %}selected{% endif %}>旷课</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" id="periodBtn_{{ s.id }}">
+                                                <span id="periodLabel_{{ s.id }}">{% if not rec or rec.status == 'present' %}全天{% elif rec.period %}{{ rec.period|popcount }}节{% else %}0节{% endif %}</span>
+                                            </button>
+                                            <div class="dropdown-menu p-2" style="min-width:180px;font-size:13px">
+                                                <input type="hidden" name="period_sum_{{ s.id }}" id="periodSum_{{ s.id }}" value="{{ rec.period if rec else 2047 }}">
+                                                <label class="dropdown-item py-1 px-2 border-bottom"><input type="checkbox" onchange="toggleDropAll(this, {{ s.id }})" {% if not rec or rec.status == 'present' %}checked{% endif %}> <strong>全选/取消</strong></label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="1" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period % 2 == 1) %}checked{% endif %}> 早自习</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="2" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 2 % 2 == 1) %}checked{% endif %}> 第1节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="4" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 4 % 2 == 1) %}checked{% endif %}> 第2节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="8" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 8 % 2 == 1) %}checked{% endif %}> 第3节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="16" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 16 % 2 == 1) %}checked{% endif %}> 第4节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="32" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 32 % 2 == 1) %}checked{% endif %}> 第5节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="64" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 64 % 2 == 1) %}checked{% endif %}> 第6节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="128" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 128 % 2 == 1) %}checked{% endif %}> 第7节</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="256" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 256 % 2 == 1) %}checked{% endif %}> 夜自习1</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="512" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 512 % 2 == 1) %}checked{% endif %}> 夜自习2</label>
+                                                <label class="dropdown-item py-1 px-2"><input type="checkbox" value="1024" class="drop-cb-{{ s.id }}" onchange="updateDropLabel({{ s.id }})" {% if not rec or rec.status == 'present' or (rec.period and rec.period // 1024 % 2 == 1) %}checked{% endif %}> 夜自习3</label>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="reason_{{ s.id }}" class="form-control form-control-sm reason-input"
+                                               placeholder="原因" value="{{ rec.reason if rec else '' }}"
+                                               {% if not rec or rec.status == 'present' %}disabled{% endif %}>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <input type="file" name="image_{{ s.id }}" class="form-control form-control-sm" accept="image/*" style="width:100px;font-size:12px" onchange="previewImage(this)">
+                                            {% if rec and rec.image_path %}
+                                            <a href="/static/{{ rec.image_path }}" target="_blank">
+                                                <img src="/static/{{ rec.image_path }}" class="img-thumbnail" style="max-height:40px;cursor:pointer;" title="已有凭证">
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="6" class="text-center text-muted">请先添加学生</td></tr>
+                                {% endfor %}
+                            </tbody>
+                            </table>
+                            </div>
+                            </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">已登记 ({{ query_date }})</div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:500px;overflow-y:auto">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>姓名</th><th>状态</th><th>课时</th><th>原因</th></tr></thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr>
+                                <td>{{ r.student.name }}</td>
+                                <td>
+                                    {% if r.status == 'late' %}<span class="badge badge-late">迟到</span>
+                                    {% elif r.status == 'sick' %}<span class="badge badge-sick">病假</span>
+                                    {% elif r.status == 'personal' %}<span class="badge badge-personal">事假</span>
+                                    {% elif r.status == 'truant' %}<span class="badge badge-truant">旷课</span>
+                                    {% else %}<span class="badge badge-present">出勤</span>{% endif %}
+                                </td>
+                                <td>{% if r.status == 'present' %}11节{% else %}{{ r.period|popcount }}节{% endif %}</td>
+                                <td><small>{{ r.reason }}</small></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted">暂无记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleReason(sel) {
+    var row = sel.closest('tr');
+    var input = row.querySelector('.reason-input');
+    var sid = sel.name.split('_')[1];
+    if (sel.value === 'present') {
+        input.value = '';
+        input.placeholder = '出勤无需填写';
+        input.disabled = true;
+        // 出勤时全部勾选
+        document.querySelectorAll('.drop-cb-' + sid).forEach(function(cb) { cb.checked = true; });
+        document.getElementById('periodSum_' + sid).value = '2047';
+        updateDropLabel(sid);
+    } else {
+        input.placeholder = sel.value === 'truant' ? '旷课原因' : '请假原因';
+        input.disabled = false;
+    }
+}
+function updateDropLabel(sid) {
+    var cbs = document.querySelectorAll('.drop-cb-' + sid + ':checked');
+    var sum = 0;
+    cbs.forEach(function(cb) { sum += parseInt(cb.value); });
+    document.getElementById('periodSum_' + sid).value = sum;
+    // 计算勾选了多少个课时（bits count）
+    var count = 0;
+    cbs.forEach(function() { count++; });
+    var label = document.getElementById('periodLabel_' + sid);
+    if (count === 0) label.textContent = '0节';
+    else if (count === 11) label.textContent = '全天';
+    else label.textContent = count + '节';
+}
+function toggleDropAll(cb, sid) {
+    var checked = cb.checked;
+    document.querySelectorAll('.drop-cb-' + sid).forEach(function(chk) { chk.checked = checked; });
+    updateDropLabel(sid);
+}
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var preview = input.closest('td').querySelector('.img-thumbnail');
+            if (preview) preview.src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+function setAllPresent() {
+    if (!confirm('将全部学生标记为出勤并保存？')) return;
+    var rows = document.querySelectorAll('#attendance_table tbody tr');
+    rows.forEach(function(row) {
+        var sel = row.querySelector('.status-select');
+        if (sel) { sel.value = 'present'; toggleReason(sel); }
+    });
+    var form = document.querySelector('form[action="/attendance"]');
+    if (form) form.submit();
+}
+</script>
+</script>
+{% endblock %}

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班级管理系统</title>
+    <link rel="icon" href="/static/favicon.png">
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+        .sidebar { background: #001529; position: fixed; top: 0; left: 0; width: 220px; height: 100vh; color: #fff; z-index: 100; overflow-y: auto; }
+        .sidebar .nav-link { color: #ffffffa6; padding: 12px 20px; border-radius: 0; transition: all 0.2s; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: #1890ff; }
+        .sidebar .nav-link i { width: 20px; margin-right: 8px; }
+        .sidebar .logo { padding: 20px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #ffffff1a; }
+        .main-content { height: 100vh; display: flex; flex-direction: column; }
+        .main-content-header { flex-shrink: 0; background: #f0f2f5; position: sticky; top: 0; z-index: 10; padding: 20px 20px 0 20px; }
+        .main-content-body { flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px #0000000d; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px #0000001a; }
+        .stat-card .number { font-size: 28px; font-weight: bold; }
+        .stat-card .label { color: #666; font-size: 14px; }
+        .page-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #1a1a1a; position: sticky; top: 0; z-index: 10; background: #f0f2f5; padding: 12px 0 8px; margin: 0 0 12px 0; }
+        .card { border-radius: 8px; box-shadow: 0 1px 3px #0000000d; }
+        .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; font-weight: 600; }
+        .table th { background: #fafafa; font-weight: 600; }
+        .alert { margin-bottom: 8px; }
+        table img.voucher-thumb { max-width: 80px; max-height: 60px; border-radius: 4px; cursor: pointer; }
+        @media print { .sidebar, .no-print { display: none !important; } .main-content { margin: 0 !important; } }
+        @media (max-width: 767px) {
+            .main-content { padding: 12px; }
+            .page-title { font-size: 16px; }
+            .stat-card .number { font-size: 22px; }
+            .stat-card { padding: 12px; }
+            .table th, .table td { font-size: 12px; padding: 4px !important; }
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+<div class="d-flex">
+        <div class="sidebar d-none d-md-block"
+             style="width:220px;flex-shrink:0;background:#001529;position:fixed;top:0;left:0;height:100vh;color:#fff;z-index:100;overflow-y:auto;">
+            <div class="logo"><i class="fas fa-graduation-cap"></i> 班级管理</div>
+            <ul class="nav flex-column">
+                <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/"><i class="fas fa-home"></i> 首页仪表盘</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/students' in request.path %}active{% endif %}" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#vSub"><i class="fas fa-gavel"></i> 违纪管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                    <div class="collapse" id="vSub">
+                        <ul class="nav flex-column ms-3">
+                            <li class="nav-item"><a class="nav-link" href="/discipline" style="font-size:13px;padding:6px 16px"><i class="fas fa-file-alt"></i> 处分管理</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/violation" style="font-size:13px;padding:6px 16px"><i class="fas fa-clipboard-list"></i> 违纪记录</a></li>
+                        </ul>
+                    </div>
+                </li>
+                <li class="nav-item"><a class="nav-link {% if '/attendance' in request.path and '/weekly' not in request.path and '/stats' not in request.path %}active{% endif %}" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/attendance/weekly' in request.path %}active{% endif %}" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/grades' in request.path %}active{% endif %}" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/training' in request.path %}active{% endif %}" href="/training"><i class="fas fa-tools"></i> 实训管理</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
+                <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
+                <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
+                <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
+            </ul>
+            <hr style="border-color:#ffffff1a; margin:8px 16px;">
+            <form method="post" action="/semester/set" class="px-3 py-1">
+                <div class="d-flex gap-1 align-items-center">
+                    <select name="semester_id" class="form-select form-select-sm flex-grow-1" style="font-size:11px;background:#ffffff1a;color:#fff;border:none" onchange="this.form.submit()">
+                        {% for s in semesters %}
+                        <option value="{{ s.id }}" {% if current_semester and s.id == current_semester.id %}selected{% endif %} style="color:#000">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <a href="#" onclick="confirmDelSemester({{ current_semester.id }});return false" style="color:#ff6666;font-size:14px;text-decoration:none;font-weight:bold" title="删除当前学期及其所有数据"><i class="fas fa-times-circle"></i></a>
+                </div>
+            </form>
+            <div class="px-3 py-1 text-center">
+                <a href="#" onclick="document.getElementById('newSemesterModal').classList.add('show');document.getElementById('newSemesterModal').style.display='block';return false" style="color:#ffffff99;font-size:11px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
+            </div>
+            <div class="px-3 py-1" style="color:#ffffff66;font-size:11px">{{ session.get('username','') }}</div>
+            <a class="nav-link py-1" href="/logout" style="color:#ffffff99;font-size:12px"><i class="fas fa-sign-out-alt"></i> 退出</a>
+        </div>
+
+        <div class="main-content-wrap" style="flex:1;margin-left:220px;height:100vh;display:flex;flex-direction:column;">
+            <div class="d-flex justify-content-between align-items-center mb-3 d-md-none">
+                <h5 class="mb-0">班级管理系统</h5>
+                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <div class="main-content-header">
+                {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                <div class="alert alert-success alert-dismissible fade show">
+                    {% for msg in messages %}{{ msg }}{% endfor %}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endif %}
+                {% endwith %}
+                </div>
+                <div class="main-content-body">
+                {% block content %}{% endblock %}
+                </div>
+            <div class="modal fade" id="newSemesterModal" tabindex="-1">
+                <div class="modal-dialog modal-sm">
+                    <form class="modal-content" method="post" action="/semester/add">
+                        <div class="modal-header"><h6 class="modal-title">新建学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <div class="mb-2">
+                                <label class="form-label">学期名称</label>
+                                <input type="text" name="name" class="form-control form-control-sm" placeholder="如：2026-2027学年度第1学期" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">开始日期</label>
+                                <input type="date" name="start_date" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">结束日期</label>
+                                <input type="date" name="end_date" class="form-control form-control-sm" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                            <button type="submit" class="btn btn-sm btn-primary">创建</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-start" id="mobileMenu">
+    <div class="offcanvas-header"><h5>班级管理</h5><button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button></div>
+    <div class="offcanvas-body p-0">
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="#"><i class="fas fa-gavel"></i> 违纪管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
+            <li class="nav-item"><a class="nav-link" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
+            <li class="nav-item"><a class="nav-link" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tools"></i> 实训管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
+            <li class="nav-item"><hr></li>
+            <li class="nav-item"><a class="nav-link" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
+        </ul>
+    </div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script>
+function confirmDelSemester(id) {
+    if (!confirm('⚠️ 确定要删除此学期吗？所有关联数据（考勤、处分、成绩、实训等）将被永久删除！')) return;
+    if (!confirm('❗ 再次确认：此操作不可撤销！真的要删除吗？')) return;
+    fetch('/semester/' + id + '/delete', {method:'POST'}).then(function(r){location.reload();});
+}
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.table-resizable').forEach(function(table) {
+        const tableId = table.id || table.className.replace(/\s+/g, '_');
+        const headers = table.querySelectorAll('th');
+        let savedWidths = {};
+        try { savedWidths = JSON.parse(localStorage.getItem('colwidths_' + tableId) || '{}'); } catch(e) {}
+        headers.forEach(function(th, idx) {
+            if (savedWidths[idx]) th.style.width = savedWidths[idx];
+            const resizer = document.createElement('div');
+            resizer.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:10;';
+            th.style.position = 'relative'; th.appendChild(resizer);
+            let startX, startWidth;
+            resizer.addEventListener('mousedown', function(e) {
+                startX = e.clientX; startWidth = th.offsetWidth;
+                document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+                function onMouseMove(e) {
+                    const diff = e.clientX - startX;
+                    th.style.width = Math.max(40, startWidth + diff) + 'px';
+                }
+                function onMouseUp() {
+                    document.body.style.cursor = ''; document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    const allWidths = {};
+                    headers.forEach(function(h, i) { allWidths[i] = h.style.width || h.offsetWidth + 'px'; });
+                    try { localStorage.setItem('colwidths_' + tableId, JSON.stringify(allWidths)); } catch(e) {}
+                }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                e.preventDefault();
+            });
+        });
+    });
+    document.querySelectorAll('.table-sortable').forEach(function(table) {
+        const headers = table.querySelectorAll('th'); const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        headers.forEach(function(th, colIdx) {
+            if (th.querySelector('a') || th.querySelector('button') || th.innerText.trim() === '操作' || th.innerText.trim() === '#') return;
+            th.style.cursor = 'pointer'; th.title = '点击排序';
+            th.addEventListener('click', function() {
+                const isAsc = th.classList.contains('sort-asc');
+                headers.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                function getCellValue(row, idx) {
+                    const cell = row.children[idx]; if (!cell) return '';
+                    let val = cell.innerText.trim();
+                    const num = parseFloat(val.replace(/[,，]/g, ''));
+                    if (!isNaN(num) && val.replace(/[,，\s]/g, '') !== '') return num;
+                    const dateMatch = val.match(/(\d{4})-(\d{2})-(\d{2})/);
+                    if (dateMatch) return dateMatch[0];
+                    return val;
+                }
+                if (isAsc) {
+                    th.classList.add('sort-desc');
+                    rows.sort(function(a,b){var va=getCellValue(a,colIdx),vb=getCellValue(b,colIdx);if(typeof va==='number'&&typeof vb==='number')return vb-va;return String(vb).localeCompare(String(va),'zh-CN');});
+                } else {
+                    th.classList.add('sort-asc');
+                    rows.sort(function(a,b){var va=getCellValue(a,colIdx),vb=getCellValue(b,colIdx);if(typeof va==='number'&&typeof vb==='number')return va-vb;return String(va).localeCompare(String(vb),'zh-CN');});
+                }
+                rows.forEach(function(row){tbody.appendChild(row);});
+            });
+        });
+    });
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

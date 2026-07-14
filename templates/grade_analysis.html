@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-chart-pie"></i> 成绩分析</h4>
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">各科综合成绩平均分</div>
+            <div class="card-body">
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>科目</th><th>平均综合分</th><th>评级</th></tr></thead>
+                    <tbody>
+                        {% for sub in subjects %}
+                        <tr>
+                            <td>{{ sub }}</td>
+                            <td><strong>{{ averages.get(sub, 0) }}</strong></td>
+                            <td>
+                                {% set a = averages.get(sub, 0) %}
+                                {% if a >= 90 %}<span class="badge bg-success">优</span>
+                                {% elif a >= 80 %}<span class="badge bg-primary">良</span>
+                                {% elif a >= 70 %}<span class="badge bg-info text-dark">中</span>
+                                {% elif a >= 60 %}<span class="badge bg-warning text-dark">及格</span>
+                                {% else %}<span class="badge bg-danger">不及格</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-info">
+                            <td><strong>总评平均分</strong></td>
+                            <td><strong>{{ avg_overall }}</strong></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

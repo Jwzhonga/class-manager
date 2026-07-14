@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-chart-bar"></i> 成绩管理</h4>
+
+{% if subjects %}
+<div class="row g-2 align-items-center mb-3">
+    <div class="col-auto">
+        <form method="get" action="/grades" class="d-inline">
+            <select name="subject" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:200px">
+                {% for sub in subjects %}
+                <option value="{{ sub }}" {% if sub == current_subject %}selected{% endif %}>{{ sub }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    <div class="col-auto">
+        <span class="text-muted small">平均综合分：<strong>{{ avg }}</strong></span>
+    </div>
+    <div class="col-auto ms-auto">
+        <div class="btn-group btn-group-sm">
+            <a href="/export/grades?format=excel&subject={{ current_subject }}" class="btn btn-outline-success"><i class="fas fa-file-excel"></i> 导出Excel</a>
+            <a href="/export/grades?format=pdf&subject={{ current_subject }}" class="btn btn-outline-danger"><i class="fas fa-file-pdf"></i> 导出PDF</a>
+        </div>
+    </div>
+</div>
+
+<form method="post" action="/grades/save">
+    <input type="hidden" name="subject" value="{{ current_subject }}">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered mb-0 table-sm table-resizable table-sortable" id="grades_table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px">#</th>
+                            <th>姓名</th>
+                            <th style="width:100px">课堂表现</th>
+                            <th style="width:100px">作业质量</th>
+                            <th style="width:100px">课堂笔记</th>
+                            <th style="width:100px">考试成绩</th>
+                            <th style="width:100px">综合成绩</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in students %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item.student.name }}</strong></td>
+                            <td><input type="number" name="perf_{{ item.student.id }}" value="{{ item.grade.performance_score if item.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                            <td><input type="number" name="hw_{{ item.student.id }}" value="{{ item.grade.homework_score if item.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                            <td><input type="number" name="notes_{{ item.student.id }}" value="{{ item.grade.notes_score if item.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                            <td><input type="number" name="exam_{{ item.student.id }}" value="{{ item.grade.exam_score if item.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                            <td class="text-center">
+                                {% if item.grade and item.grade.comprehensive_score %}
+                                <strong>{{ item.grade.comprehensive_score }}</strong>
+                                {% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="text-center mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存「{{ current_subject }}」成绩</button>
+    </div>
+</form>
+
+<!-- 科目管理 -->
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between">
+        <span><i class="fas fa-book"></i> 科目管理</span>
+    </div>
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+            {% for sub in subjects %}
+            <div class="d-inline-flex align-items-center gap-1">
+                <span class="badge bg-primary">{{ sub }}</span>
+                {% set sub_obj = subject_objects|selectattr('name', 'equalto', sub)|first %}
+                {% if sub_obj %}
+                <a href="/subject/{{ sub_obj.id }}/delete" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="return confirm('删除科目「{{ sub }}」及其所有成绩？')">×</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <form method="post" action="/subject/add" class="row g-2">
+            <div class="col-auto">
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="科目名称" required>
+            </div>
+            <div class="col-auto">
+                <input type="text" name="teacher" class="form-control form-control-sm" placeholder="任课教师（选填）">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 添加科目</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% else %}
+<div class="alert alert-warning">
+    <i class="fas fa-info-circle"></i> 还没有科目，请先添加科目
+</div>
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="/subject/add" class="row g-2">
+            <div class="col-auto">
+                <input type="text" name="name" class="form-control form-control-sm" placeholder="科目名称" required>
+            </div>
+            <div class="col-auto">
+                <input type="text" name="teacher" class="form-control form-control-sm" placeholder="任课教师（选填）">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> 添加第一个科目</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

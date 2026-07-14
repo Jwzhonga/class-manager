@@ -110,14 +110,22 @@ if not exist "static\uploads" mkdir static\uploads
 
 :: ---------- Launch ----------
 echo.
-echo [4/4] Starting server...
+echo [4/4] Starting server in background...
 echo.
 echo ========================================
+echo   Server is running in background
 echo   Open browser to: http://localhost:5800
 echo   Login: admin / admin123
+echo   Close this window safely - server keeps running
+echo   To stop: double-click stop_server.bat
 echo ========================================
 
-venv\Scripts\python app.py
+:: Run in background with pythonw (no console window)
+start /b "" "venv\Scripts\pythonw.exe" app.py --port 5800
+echo [OK] Server started on port 5800
 echo.
-echo [INFO] Server stopped.
+echo This window can be closed now.
+echo The server will continue running in the background.
+echo To stop the server, run stop_server.bat
+echo.
 pause

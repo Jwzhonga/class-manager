@@ -654,6 +654,57 @@ def semester_add():
     return redirect(url_for('index'))
 
 
+@app.route('/students/quick-edit', methods=['POST'])
+@login_required
+def student_quick_edit():
+    """快速编辑学生字段（下拉切换）"""
+    sid = request.form.get('id', type=int)
+    field = request.form.get('field', '')
+    value = request.form.get('value', '')
+    student = Student.query.get_or_404(sid)
+    if hasattr(student, field):
+        setattr(student, field, value)
+        db.session.commit()
+        return {'ok': True, 'value': value}
+    return {'ok': False}, 400
+
+
+@app.route('/students/batch-delete', methods=['POST'])
+@login_required
+def student_batch_delete():
+    """批量删除学生"""
+    ids = request.form.getlist('ids')
+    if not ids:
+        flash('未选择学生')
+        return redirect(url_for('student_list'))
+    count = 0
+    for sid in ids:
+        s = Student.query.get(int(sid))
+        if s:
+            Attendance.query.filter_by(student_id=s.id).delete()
+            Grade.query.filter_by(student_id=s.id).delete()
+            TrainingRecord.query.filter_by(student_id=s.id).delete()
+            Discipline.query.filter_by(student_id=s.id).delete()
+            ViolationRecord.query.filter_by(student_id=s.id).delete()
+            db.session.delete(s)
+            count += 1
+    db.session.commit()
+    flash(f'已删除 {count} 名学生')
+    return redirect(url_for('student_list'))
+
+
+@app.route('/semester/<int:id>/rename', methods=['POST'])
+@login_required
+def semester_rename(id):
+    sem = Semester.query.get_or_404(id)
+    name = request.form.get('name', '').strip()
+    if name:
+        sem.name = name
+        db.session.commit()
+        flash(f'学期已重命名为「{name}」')
+    return redirect(request.referrer or url_for('index'))
+
+
 @app.route('/semester/<int:id>/delete', methods=['POST'])
 def semester_delete(id):
     sem = Semester.query.get_or_404(id)
@@ -663,6 +714,8 @@ def semester_delete(id):
     Discipline.query.filter_by(semester_id=id).delete()
     Grade.query.filter_by(semester_id=id).delete()
     TrainingRecord.query.filter_by(semester_id=id).delete()
+    ViolationRecord.query.filter_by(semester_id=id).delete()
+    ClassFund.query.filter_by(semester_id=id).delete()
     db.session.delete(sem)
     db.session.commit()
     if session.get('semester_id') == id:

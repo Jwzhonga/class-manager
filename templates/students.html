@@ -3,6 +3,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="page-title mb-0"><i class="fas fa-users"></i> 学生管理</h4>
     <div class="d-flex gap-2">
+        <form method="post" action="/students/batch-delete" id="batchForm" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirmBatch()"><i class="fas fa-trash"></i> 批量删除</button>
+        </form>
         <a href="/export/special-family" class="btn btn-sm btn-outline-info"><i class="fas fa-file-export"></i> 导出特殊家庭台账</a>
         <a href="/export/dormitory" class="btn btn-sm btn-outline-secondary"><i class="fas fa-bed"></i> 导出宿舍名单</a>
         <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
@@ -12,7 +15,7 @@
     </div>
 </div>
 
-<!-- 统计卡片（全部可点击） -->
+<!-- 统计卡片... -->
 <div class="row g-2 mb-2">
     <div class="col-6 col-md-2">
         <a href="/students" class="text-decoration-none">
@@ -134,7 +137,6 @@
 
 <!-- 详细统计行 -->
 <div class="row g-2 mb-3">
-    <!-- 年龄分布 -->
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-body p-2">
@@ -156,7 +158,6 @@
             </div>
         </div>
     </div>
-    <!-- 户籍地 -->
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-body p-2">
@@ -189,12 +190,7 @@
             </div>
             <form method="post" action="/students/import" enctype="multipart/form-data">
                 <div class="modal-body">
-                    <p class="text-muted">支持 .xls 和 .xlsx 格式，文件模板格式：</p>
-                    <ul class="small text-muted">
-                        <li>第1行：标题行（自动跳过）</li>
-                        <li>第2行：子标题（自动跳过）</li>
-                        <li>第3行起：数据行</li>
-                    </ul>
+                    <p class="text-muted">支持 .xls 和 .xlsx 格式</p>
                     <input type="file" name="file" class="form-control" accept=".xls,.xlsx" required>
                 </div>
                 <div class="modal-footer">
@@ -212,15 +208,13 @@
             <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
                 <thead>
                     <tr>
+                        <th style="width:40px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
                         <th>姓名</th>
                         <th>性别</th>
                         <th>班级</th>
-                        <th>身份证号</th>
-                        <th>监护人</th>
-                        <th>家长电话</th>
-                        <th>毕业学校</th>
                         <th>就读方式</th>
                         <th>建档立卡</th>
+                        <th>宿舍号</th>
                         <th>住址</th>
                         <th>操作</th>
                     </tr>
@@ -228,23 +222,31 @@
                 <tbody>
                     {% for s in students %}
                     <tr>
+                        <td><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
                         <td><strong>{{ s.name }}</strong></td>
                         <td>{{ s.gender }}</td>
                         <td>{{ s.class_name }}</td>
-                        <td><small>{{ s.id_card }}</small></td>
-                        <td>{{ s.parent_name }}<br><small class="text-muted">{{ s.parent_relation }}</small></td>
-                        <td>{{ s.parent_phone }}</td>
-                        <td><small>{{ s.graduate_school }}</small></td>
-                        <td>{{ s.live_mode }}</td>
-                        <td>{% if s.poverty_status and s.poverty_status != '否' %}<span class="badge bg-warning text-dark">{{ s.poverty_status }}</span>{% else %}否{% endif %}</td>
-                        <td style="white-space:pre-wrap;word-break:break-word;min-width:200px"><small>{{ s.address }}</small></td>
+                        <td>
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:11px;padding:1px 4px">
+                                <option value="住校" {% if s.live_mode == '住校' %}selected{% endif %}>住校</option>
+                                <option value="走读" {% if s.live_mode == '走读' %}selected{% endif %}>走读</option>
+                            </select>
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:11px;padding:1px 4px">
+                                <option value="否" {% if not s.poverty_status or s.poverty_status == '否' %}selected{% endif %}>否</option>
+                                <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困户</option>
+                            </select>
+                        </td>
+                        <td><small>{{ s.dormitory or '' }}</small></td>
+                        <td style="white-space:pre-wrap;word-break:break-word;max-width:200px"><small>{{ s.address }}</small></td>
                         <td style="white-space:nowrap">
                             <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
                             <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="11" class="text-center text-muted py-4">还没有学生，点击右上角添加或导入</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">还没有学生，点击右上角添加或导入</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -255,4 +257,27 @@
         {% if filter_type %}<span class="ms-2">（<a href="/students">清除筛选</a>）</span>{% endif %}
     </div>
 </div>
+
+<script>
+function toggleAll(cb) {
+    document.querySelectorAll('.student-checkbox').forEach(function(c) { c.checked = cb.checked; });
+}
+function confirmBatch() {
+    var n = document.querySelectorAll('.student-checkbox:checked').length;
+    if (n === 0) { alert('请先勾选学生'); return false; }
+    return confirm('确定删除选中的 ' + n + ' 名学生？');
+}
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('quick-edit')) {
+        var sel = e.target;
+        var fd = new FormData();
+        fd.append('id', sel.dataset.id);
+        fd.append('field', sel.dataset.field);
+        fd.append('value', sel.value);
+        fetch('/students/quick-edit', {method:'POST', body:fd}).then(function(r) {
+            if (!r.ok) alert('保存失败');
+        });
+    }
+});
+</script>
 {% endblock %}

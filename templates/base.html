@@ -64,22 +64,31 @@
                 <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
                 <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
             </ul>
-            <hr style="border-color:#ffffff1a; margin:8px 16px;">
-            <form method="post" action="/semester/set" class="px-3 py-1">
-                <div class="d-flex gap-1 align-items-center">
-                    <select name="semester_id" class="form-select form-select-sm flex-grow-1" style="font-size:11px;background:#ffffff1a;color:#fff;border:none" onchange="this.form.submit()">
-                        {% for s in semesters %}
-                        <option value="{{ s.id }}" {% if current_semester and s.id == current_semester.id %}selected{% endif %} style="color:#000">{{ s.name }}</option>
-                        {% endfor %}
-                    </select>
-                    <a href="#" onclick="confirmDelSemester({{ current_semester.id }});return false" style="color:#ff6666;font-size:14px;text-decoration:none;font-weight:bold" title="删除当前学期及其所有数据"><i class="fas fa-times-circle"></i></a>
+            <!-- 学期管理折叠菜单 -->
+            <div class="px-3 py-1">
+                <a class="nav-link d-block" href=\"#\" data-bs-toggle=\"collapse\" data-bs-target=\"#semSub\" style=\"color:#ffffffa6;padding:4px 0;font-size:13px\"><i class=\"fas fa-calendar-alt\"></i> 学期管理 <i class=\"fas fa-chevron-down\" style=\"font-size:10px;float:right;margin-top:4px\"></i></a>
+                <div class=\"collapse\" id=\"semSub\">
+                    {% for s in semesters %}
+                    <div class=\"d-flex align-items-center gap-1 py-1\" style=\"padding-left:4px\">
+                        <form method=\"post\" action=\"/semester/set\" class=\"flex-grow-1\" style=\"margin:0\">
+                            <button type=\"submit\" name=\"semester_id\" value=\"{{ s.id }}\"
+                                class=\"btn btn-sm w-100 text-start\" style=\"font-size:12px;background:{% if current_semester and s.id == current_semester.id %}#1890ff{% else %}transparent{% endif %};color:#fff;border:none;border-radius:4px;padding:3px 8px\">
+                                {{ s.name }}
+                            </button>
+                        </form>
+                        <a href=\"#\" onclick='showRenameSemester({{ s.id }},\"{{ s.name }}\");return false' style=\"color:#ffffff99;font-size:11px\" title=\"重命名\"><i class=\"fas fa-edit\"></i></a>
+                        {% if s.id != 1 %}
+                        <a href=\"#\" onclick='confirmDelSemester({{ s.id }});return false' style=\"color:#ff6666;font-size:11px\" title=\"删除\"><i class=\"fas fa-times\"></i></a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class=\"text-center pt-1\">
+                        <a href=\"#\" onclick=\"showNewSemester();return false\" style=\"color:#ffffff99;font-size:11px;text-decoration:none\"><i class=\"fas fa-plus\"></i> 新建学期</a>
+                    </div>
                 </div>
-            </form>
-            <div class="px-3 py-1 text-center">
-                <a href="#" onclick="document.getElementById('newSemesterModal').classList.add('show');document.getElementById('newSemesterModal').style.display='block';return false" style="color:#ffffff99;font-size:11px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
             </div>
-            <div class="px-3 py-1" style="color:#ffffff66;font-size:11px">{{ session.get('username','') }}</div>
-            <a class="nav-link py-1" href="/logout" style="color:#ffffff99;font-size:12px"><i class="fas fa-sign-out-alt"></i> 退出</a>
+            <div class=\"px-3 py-1\" style=\"color:#ffffff66;font-size:11px\">{{ session.get('username','') }}</div>
+            <a class=\"nav-link py-1\" href=\"/logout\" style=\"color:#ffffff99;font-size:12px\"><i class=\"fas fa-sign-out-alt\"></i> 退出</a>
         </div>
 
         <div class="main-content-wrap" style="flex:1;margin-left:220px;height:100vh;display:flex;flex-direction:column;">
@@ -102,31 +111,51 @@
                 <div class="main-content-body">
                 {% block content %}{% endblock %}
                 </div>
-            <div class="modal fade" id="newSemesterModal" tabindex="-1">
-                <div class="modal-dialog modal-sm">
-                    <form class="modal-content" method="post" action="/semester/add">
-                        <div class="modal-header"><h6 class="modal-title">新建学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                        <div class="modal-body">
-                            <div class="mb-2">
-                                <label class="form-label">学期名称</label>
-                                <input type="text" name="name" class="form-control form-control-sm" placeholder="如：2026-2027学年度第1学期" required>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">开始日期</label>
-                                <input type="date" name="start_date" class="form-control form-control-sm" required>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">结束日期</label>
-                                <input type="date" name="end_date" class="form-control form-control-sm" required>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
-                            <button type="submit" class="btn btn-sm btn-primary">创建</button>
-                        </div>
-                    </form>
+<!-- 新建学期模态框 -->
+<div class="modal fade" id="newSemesterModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post" action="/semester/add">
+            <div class="modal-header"><h6 class="modal-title"><i class="fas fa-plus"></i> 新建学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">学期名称</label>
+                    <input type="text" name="name" class="form-control form-control-sm" placeholder="如：2026-2027学年度第1学期" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">开始日期</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm" required>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">结束日期</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm" required>
                 </div>
             </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-sm btn-primary">创建</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 重命名学期模态框 -->
+<div class="modal fade" id="renameSemesterModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <form class="modal-content" method="post" action="" id="renameSemesterForm">
+            <div class="modal-header"><h6 class="modal-title"><i class="fas fa-edit"></i> 重命名学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label">新名称</label>
+                    <input type="text" name="name" id="renameSemesterInput" class="form-control form-control-sm" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-sm btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
         </div>
     </div>
 </div>
@@ -151,9 +180,19 @@
 
 <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 <script>
+function showNewSemester() {
+    var m = new bootstrap.Modal(document.getElementById('newSemesterModal'));
+    m.show();
+}
+function showRenameSemester(id, name) {
+    document.getElementById('renameSemesterInput').value = name;
+    document.getElementById('renameSemesterForm').action = '/semester/' + id + '/rename';
+    var m = new bootstrap.Modal(document.getElementById('renameSemesterModal'));
+    m.show();
+}
 function confirmDelSemester(id) {
-    if (!confirm('⚠️ 确定要删除此学期吗？所有关联数据（考勤、处分、成绩、实训等）将被永久删除！')) return;
-    if (!confirm('❗ 再次确认：此操作不可撤销！真的要删除吗？')) return;
+    if (!confirm('确定要删除此学期吗？所有关联数据将被永久删除！')) return;
+    if (!confirm('再次确认：此操作不可撤销！')) return;
     fetch('/semester/' + id + '/delete', {method:'POST'}).then(function(r){location.reload();});
 }
 </script>

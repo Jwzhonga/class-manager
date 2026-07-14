@@ -211,7 +211,7 @@
                         <th style="width:40px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
                         <th>姓名</th>
                         <th>性别</th>
-                        <th>班级</th>
+                        <th>监护人</th>
                         <th>就读方式</th>
                         <th>建档立卡</th>
                         <th>宿舍号</th>
@@ -225,7 +225,7 @@
                         <td><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
                         <td><strong>{{ s.name }}</strong></td>
                         <td>{{ s.gender }}</td>
-                        <td>{{ s.class_name }}</td>
+                        <td><small>{{ s.parent_name }}<br>{{ s.parent_phone }}</small></td>
                         <td>
                             <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:11px;padding:1px 4px">
                                 <option value="住校" {% if s.live_mode == '住校' %}selected{% endif %}>住校</option>
@@ -238,7 +238,9 @@
                                 <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困户</option>
                             </select>
                         </td>
-                        <td><small>{{ s.dormitory or '' }}</small></td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:11px;padding:1px 4px;width:80px">
+                        </td>
                         <td style="white-space:pre-wrap;word-break:break-word;max-width:200px"><small>{{ s.address }}</small></td>
                         <td style="white-space:nowrap">
                             <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
@@ -279,5 +281,15 @@ document.addEventListener('change', function(e) {
         });
     }
 });
+document.addEventListener('blur', function(e) {
+    if (e.target.classList.contains('quick-input')) {
+        var inp = e.target;
+        var fd = new FormData();
+        fd.append('id', inp.dataset.id);
+        fd.append('field', inp.dataset.field);
+        fd.append('value', inp.value);
+        fetch('/students/quick-edit', {method:'POST', body:fd});
+    }
+}, true);
 </script>
 {% endblock %}

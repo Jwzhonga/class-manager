@@ -66,29 +66,29 @@
             </ul>
             <!-- 学期管理折叠菜单 -->
             <div class="px-3 py-1">
-                <a class="nav-link d-block" href=\"#\" data-bs-toggle=\"collapse\" data-bs-target=\"#semSub\" style=\"color:#ffffffa6;padding:4px 0;font-size:13px\"><i class=\"fas fa-calendar-alt\"></i> 学期管理 <i class=\"fas fa-chevron-down\" style=\"font-size:10px;float:right;margin-top:4px\"></i></a>
-                <div class=\"collapse\" id=\"semSub\">
+                <a class="nav-link d-block" href="#" data-bs-toggle="collapse" data-bs-target="#semSub" style="color:#ffffffa6;padding:4px 0;font-size:13px"><i class="fas fa-calendar-alt"></i> 学期管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:4px"></i></a>
+                <div class="collapse" id="semSub">
                     {% for s in semesters %}
-                    <div class=\"d-flex align-items-center gap-1 py-1\" style=\"padding-left:4px\">
-                        <form method=\"post\" action=\"/semester/set\" class=\"flex-grow-1\" style=\"margin:0\">
-                            <button type=\"submit\" name=\"semester_id\" value=\"{{ s.id }}\"
-                                class=\"btn btn-sm w-100 text-start\" style=\"font-size:12px;background:{% if current_semester and s.id == current_semester.id %}#1890ff{% else %}transparent{% endif %};color:#fff;border:none;border-radius:4px;padding:3px 8px\">
+                    <div class="d-flex align-items-center gap-1 py-1" style="padding-left:4px">
+                        <form method="post" action="/semester/set" class="flex-grow-1" style="margin:0">
+                            <button type="submit" name="semester_id" value="{{ s.id }}"
+                                class="btn btn-sm w-100 text-start" style="font-size:12px;background:{% if current_semester and s.id == current_semester.id %}#1890ff{% else %}transparent{% endif %};color:#fff;border:none;border-radius:4px;padding:3px 8px">
                                 {{ s.name }}
                             </button>
                         </form>
-                        <a href=\"#\" onclick='showRenameSemester({{ s.id }},\"{{ s.name }}\");return false' style=\"color:#ffffff99;font-size:11px\" title=\"重命名\"><i class=\"fas fa-edit\"></i></a>
+                        <a href="#" onclick="showRenameSemester({{ s.id }},'{{ s.name }}');return false" style="color:#ffffff99;font-size:11px" title="重命名"><i class="fas fa-edit"></i></a>
                         {% if s.id != 1 %}
-                        <a href=\"#\" onclick='confirmDelSemester({{ s.id }});return false' style=\"color:#ff6666;font-size:11px\" title=\"删除\"><i class=\"fas fa-times\"></i></a>
+                        <a href="#" onclick="confirmDelSemester({{ s.id }});return false" style="color:#ff6666;font-size:11px" title="删除"><i class="fas fa-times"></i></a>
                         {% endif %}
                     </div>
                     {% endfor %}
-                    <div class=\"text-center pt-1\">
-                        <a href=\"#\" onclick=\"showNewSemester();return false\" style=\"color:#ffffff99;font-size:11px;text-decoration:none\"><i class=\"fas fa-plus\"></i> 新建学期</a>
+                    <div class="text-center pt-1">
+                        <a href="#" onclick="showNewSemester();return false" style="color:#ffffff99;font-size:11px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
                     </div>
                 </div>
             </div>
-            <div class=\"px-3 py-1\" style=\"color:#ffffff66;font-size:11px\">{{ session.get('username','') }}</div>
-            <a class=\"nav-link py-1\" href=\"/logout\" style=\"color:#ffffff99;font-size:12px\"><i class=\"fas fa-sign-out-alt\"></i> 退出</a>
+            <div class="px-3 py-1" style="color:#ffffff66;font-size:11px">{{ session.get('username','') }}</div>
+            <a class="nav-link py-1" href="/logout" style="color:#ffffff99;font-size:12px"><i class="fas fa-sign-out-alt"></i> 退出</a>
         </div>
 
         <div class="main-content-wrap" style="flex:1;margin-left:220px;height:100vh;display:flex;flex-direction:column;">

@@ -69,12 +69,6 @@ def add_date(d, days):
     return d + timedelta(days=days)
 
 app.jinja_env.globals['now'] = lambda: datetime.now()
-import json as json_module
-@app.template_filter('from_json')
-def from_json_filter(s):
-    try: return json_module.loads(s) if s else []
-    except: return []
-
 app.jinja_env.filters['popcount'] = popcount
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -272,6 +266,8 @@ class Student(db.Model):
     special_physical = db.Column(db.String(8), default='')
     special_physical_note = db.Column(db.Text, default='')
     remark = db.Column(db.Text, default='')
+    status = db.Column(db.String(16), default='active')  # active / withdrawn
+    withdrawn_reason = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
@@ -681,18 +677,51 @@ def student_batch_delete():
         flash('未选择学生')
         return redirect(url_for('student_list'))
     count = 0
+    action = request.form.get('action', 'delete')
+    if action == 'withdraw':
+        for sid in ids:
+            s = Student.query.get(int(sid))
+            reason = request.form.get(f'reason_{sid}', '').strip()
+            if s and s.status != 'withdrawn' and reason:
+                s.status = 'withdrawn'
+                s.withdrawn_reason = reason
+                db.session.add(s)
+                count += 1
+        db.session.commit()
+        flash(f'已将 {count} 名学生标记为流失')
+    else:
+        for sid in ids:
+            s = Student.query.get(int(sid))
+            if s:
+                Attendance.query.filter_by(student_id=s.id).delete()
+                Grade.query.filter_by(student_id=s.id).delete()
+                TrainingRecord.query.filter_by(student_id=s.id).delete()
+                Discipline.query.filter_by(student_id=s.id).delete()
+                ViolationRecord.query.filter_by(student_id=s.id).delete()
+                db.session.delete(s)
+                count += 1
+        db.session.commit()
+        flash(f'已删除 {count} 名学生')
+    return redirect(url_for('student_list'))
+
+
+@app.route('/students/withdraw', methods=['POST'])
+@login_required
+def student_batch_withdraw():
+    """批量标记学生为流失"""
+    ids = request.form.getlist('ids')
+    if not ids:
+        flash('未选择学生')
+        return redirect(url_for('student_list'))
+    count = 0
     for sid in ids:
         s = Student.query.get(int(sid))
-        if s:
-            Attendance.query.filter_by(student_id=s.id).delete()
-            Grade.query.filter_by(student_id=s.id).delete()
-            TrainingRecord.query.filter_by(student_id=s.id).delete()
-            Discipline.query.filter_by(student_id=s.id).delete()
-            ViolationRecord.query.filter_by(student_id=s.id).delete()
-            db.session.delete(s)
+        if s and s.status != 'withdrawn':
+            s.status = 'withdrawn'
+            db.session.add(s)
             count += 1
     db.session.commit()
-    flash(f'已删除 {count} 名学生')
+    flash(f'已将 {count} 名学生标记为流失')
     return redirect(url_for('student_list'))
 
 
@@ -719,6 +748,9 @@ def semester_delete(id):
     TrainingRecord.query.filter_by(semester_id=id).delete()
     ViolationRecord.query.filter_by(semester_id=id).delete()
     ClassFund.query.filter_by(semester_id=id).delete()
+    Subject.query.filter_by(semester_id=id).delete()
+    TrainingProject.query.filter_by(semester_id=id).delete()
+    Schedule.query.filter_by(semester_id=id).delete()
     db.session.delete(sem)
     db.session.commit()
     if session.get('semester_id') == id:
@@ -733,7 +765,8 @@ def semester_delete(id):
 @app.route('/')
 @login_required
 def index():
-    total_students = len(get_semester_students())
+    all_students = get_semester_students()
+    total_students = len([s for s in all_students if s.status != 'withdrawn'])
     today = date.today()
     sem_id = get_current_semester_id()
 
@@ -835,6 +868,8 @@ def student_list():
         students_query = students_query.filter(Student.special_family != '', Student.special_family.isnot(None))
     elif filter_type == 'special_physical':
         students_query = students_query.filter(Student.special_physical == '是')
+    elif filter_type == 'withdrawn':
+        students_query = students_query.filter(Student.status == 'withdrawn')
     elif filter_type == 'age_range':
         all_s = Student.query.all()
         filtered = []
@@ -859,14 +894,17 @@ def student_list():
     if isinstance(students_query, list):
         students = students_query
         display_count = len(students)
-        total = len(get_semester_students())
+        total = len([s for s in get_semester_students() if s.status != 'withdrawn'])
     else:
+        # 非过滤模式排除流失学生
+        if filter_type != 'withdrawn':
+            students_query = students_query.filter(Student.status != 'withdrawn')
         students = students_query.all()
         display_count = len(students)
-        total = len(get_semester_students())
+        total = len([s for s in get_semester_students() if s.status != 'withdrawn'])
 
-    # 统计
-    all_students = get_semester_students()
+    # 统计（排除流失学生）
+    all_students = [s for s in get_semester_students() if s.status != 'withdrawn']
     poverty_count = sum(1 for s in all_students if s.poverty_status in ('贫困户', '是'))
     boarding_count = sum(1 for s in all_students if s.live_mode == '住校')
     day_count = sum(1 for s in all_students if s.live_mode == '走读')
@@ -884,10 +922,12 @@ def student_list():
                         special_family_types[t] = []
                     special_family_types[t].append(s.name)
     special_physical_count = sum(1 for s in all_students if s.special_physical == '是')
-    special_physical_notes = []
-    for s in all_students:
-        if s.special_physical == '是' and s.special_physical_note:
-            special_physical_notes.append({'name': s.name, 'note': s.special_physical_note})
+    special_physical_notes = [{'name': s.name, 'note': s.special_physical_note} for s in all_students if s.special_physical == '是' and s.special_physical_note]
+    withdrawn_count = sum(1 for s in Student.query.filter_by(semester_id=sem_id) if s.status == 'withdrawn')
+    withdrawn_students = [s for s in all_students if s.status == 'withdrawn']
+
+    # 总人数排除流失
+    active_students = [s for s in all_students if s.status != 'withdrawn']
 
     # 年龄分布
     ages = [get_age(s.id_card) for s in all_students if get_age(s.id_card) is not None]
@@ -928,6 +968,9 @@ def student_list():
         'special_family_types': special_family_types,
         'special_physical_count': special_physical_count,
         'special_physical_notes': special_physical_notes,
+        'withdrawn_count': withdrawn_count,
+        'withdrawn_students': withdrawn_students,
+        'active_count': len(active_students),
         'age_ranges': age_ranges,
         'avg_age': avg_age,
         'max_age': max_age,
@@ -1386,7 +1429,7 @@ def _export_discipline_excel(records):
 
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
-    students = get_semester_students()
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
     today = date.today()
     query_date_str = request.args.get('date', today.isoformat())
 
@@ -1456,7 +1499,7 @@ def attendance():
 @app.route('/attendance/stats')
 def attendance_stats():
     sem_id = get_current_semester_id()
-    students = get_semester_students()
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
     stats_data = []
     for s in students:
         q = Attendance.query.filter_by(student_id=s.id)
@@ -1493,7 +1536,7 @@ def attendance_stats():
         chart_sick.append(sum(popcount(r.period) for r in day_records if r.status == 'sick'))
         chart_personal.append(sum(popcount(r.period) for r in day_records if r.status == 'personal'))
     
-    total_students = len(get_semester_students())
+    total_students = len([s for s in get_semester_students() if s.status != 'withdrawn'])
     
     return render_template('attendance_stats.html',
                           students=stats_data,
@@ -1514,7 +1557,7 @@ def attendance_weekly():
     week_dates = [monday + timedelta(days=i) for i in range(7)]
     week_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     
-    students = get_semester_students()
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
     week_data = []
     for s in students:
         day_records = {}
@@ -2972,6 +3015,12 @@ if __name__ == '__main__':
             for col, typ in [('dormitory','VARCHAR(32)'),('special_family','VARCHAR(64)'),
                              ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
                              ('special_physical_note','TEXT'),('remark','TEXT')]:
+                try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
+                except: pass
+            for col, typ in [('status','VARCHAR(16)')]:
+                try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
+                except: pass
+            for col, typ in [('withdrawn_reason','TEXT')]:
                 try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
                 except: pass
             conn.commit(); conn.close()

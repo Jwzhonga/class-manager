@@ -15,13 +15,28 @@
     </div>
 </div>
 
+<!-- 流失原因弹窗 -->
+<div class="modal fade" id="withdrawModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <form class="modal-content" method="post" action="/students/batch-delete" id="withdrawForm">
+            <div class="modal-header"><h6 class="modal-title"><i class="fas fa-user-slash"></i> 填写流失原因</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="withdrawModalBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-sm btn-primary">确认流失</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- 统计卡片... -->
 <div class="row g-2 mb-2">
     <div class="col-6 col-md-2">
         <a href="/students" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if not filter_type %}border-primary{% endif %}">
-                <div class="number" style="font-size:20px">{{ stats.total }}</div>
-                <div class="label" style="font-size:11px">学生总数</div>
+                <div class="number" style="font-size:20px">{{ stats.active_count }}</div>
+                <div class="label" style="font-size:11px">在籍人数</div>
             </div>
         </a>
     </div>
@@ -91,6 +106,14 @@
             </div>
         </a>
     </div>
+    <div class="col-6 col-md-2">
+        <a href="/students?filter=withdrawn" class="text-decoration-none">
+            <div class="stat-card text-center p-2 {% if filter_type == 'withdrawn' %}border-danger{% endif %}">
+                <div class="number" style="font-size:20px;color:#8c8c8c">{{ stats.withdrawn_count }}</div>
+                <div class="label" style="font-size:11px">流失</div>
+            </div>
+        </a>
+    </div>
 </div>
 
 {% if filter_type == 'special_family' and stats.special_family_types %}
@@ -125,6 +148,28 @@
                         <tbody>
                             {% for item in stats.special_physical_notes %}
                             <tr><td>{{ item.name }}</td><td>{{ item.note }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if filter_type == 'withdrawn' and stats.withdrawn_students %}
+<div class="row g-2 mb-3">
+    <div class="col-12">
+        <div class="card bg-light border-danger">
+            <div class="card-body p-2">
+                <small class="text-muted"><i class="fas fa-user-slash"></i> 流失学生名单（共 {{ stats.withdrawn_count }} 人）</small>
+                <div class="table-responsive mt-1">
+                    <table class="table table-sm table-borderless mb-0">
+                        <thead><tr><th>姓名</th><th>性别</th><th>身份证号</th><th>监护人</th></tr></thead>
+                        <tbody>
+                            {% for s in stats.withdrawn_students %}
+                            <tr><td>{{ s.name }}</td><td>{{ s.gender }}</td><td>{{ s.id_card }}</td><td>{{ s.parent_name }} {{ s.parent_phone }}<br><small class="text-danger">原因：{{ s.withdrawn_reason }}</small></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -205,53 +250,76 @@
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
+            <!-- 批量操作栏 -->
+            <div id="batchBar" class="d-none align-items-center gap-2 p-2 mb-2 bg-light rounded border" style="font-size:12px">
+                <span id="batchCount">0</span> 名学生已选中
+                <button type="submit" form="batchForm" class="btn btn-sm btn-outline-danger" onclick="return confirmBatch()"><i class="fas fa-trash"></i> 批量删除</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="batchWithdraw()"><i class="fas fa-user-slash"></i> 流失</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">取消选择</button>
+            </div>
+            <form method="post" action="/students/batch-delete" id="batchForm">
             <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
                 <thead>
                     <tr>
-                        <th style="width:40px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
-                        <th>姓名</th>
-                        <th>性别</th>
-                        <th>监护人</th>
-                        <th>就读方式</th>
-                        <th>建档立卡</th>
-                        <th>宿舍号</th>
-                        <th>住址</th>
-                        <th>操作</th>
+                        <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                        <th style="width:55px">姓名</th>
+                        <th style="width:35px">性别</th>
+                        <th style="width:130px">身份证号</th>
+                        <th style="width:90px">监护人</th>
+                        <th style="width:60px">关系</th>
+                        <th style="width:95px">电话</th>
+                        <th style="width:80px">就读</th>
+                        <th style="width:80px">建档</th>
+                        <th style="width:55px" data-no-sort>宿舍</th>
+                        <th style="width:50px">户口</th>
+                        <th style="width:50px">民族</th>
+                        <th style="min-width:90px">住址</th>
+                        <th style="width:65px" data-no-sort>操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in students %}
                     <tr>
                         <td><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
-                        <td><strong>{{ s.name }}</strong></td>
-                        <td>{{ s.gender }}</td>
-                        <td><small>{{ s.parent_name }}<br>{{ s.parent_phone }}</small></td>
+                        <td style="font-size:12px">{{ s.name }}</td>
+                        <td style="font-size:12px">{{ s.gender }}</td>
+                        <td style="font-size:12px">{{ s.id_card }}</td>
+                        <td style="font-size:12px">{{ s.parent_name }}</td>
+                        <td style="font-size:12px">{{ s.parent_relation or '' }}</td>
+                        <td style="font-size:12px">{{ s.parent_phone }}</td>
                         <td>
-                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:11px;padding:1px 4px">
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:12px;padding:1px 22px 1px 4px;width:100%" onchange="toggleDorm(this, {{ s.id }})">
                                 <option value="住校" {% if s.live_mode == '住校' %}selected{% endif %}>住校</option>
                                 <option value="走读" {% if s.live_mode == '走读' %}selected{% endif %}>走读</option>
                             </select>
                         </td>
                         <td>
-                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:11px;padding:1px 4px">
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:12px;padding:1px 22px 1px 4px;width:100%">
                                 <option value="否" {% if not s.poverty_status or s.poverty_status == '否' %}selected{% endif %}>否</option>
-                                <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困户</option>
+                                <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困</option>
                             </select>
                         </td>
-                        <td>
-                            <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:11px;padding:1px 4px;width:80px">
+                        <td id="dorm-{{ s.id }}">
+                            {% if s.live_mode == '住校' %}
+                            <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:12px;padding:1px 4px;width:100%">
+                            {% else %}
+                            <span class="text-muted" style="font-size:11px">—</span>
+                            {% endif %}
                         </td>
-                        <td style="white-space:pre-wrap;word-break:break-word;max-width:200px"><small>{{ s.address }}</small></td>
+                        <td style="font-size:12px">{{ s.residence_type or '' }}</td>
+                        <td style="font-size:12px">{{ s.ethnic or '' }}</td>
+                        <td style="white-space:pre-wrap;word-break:break-word;max-width:150px;font-size:12px">{{ s.address }}</td>
                         <td style="white-space:nowrap">
                             <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
                             <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="9" class="text-center text-muted py-4">还没有学生，点击右上角添加或导入</td></tr>
+                    <tr><td colspan="14" class="text-center text-muted py-4">还没有学生，点击右上角添加或导入</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+            </form>
         </div>
     </div>
     <div class="card-footer text-muted small">
@@ -263,11 +331,60 @@
 <script>
 function toggleAll(cb) {
     document.querySelectorAll('.student-checkbox').forEach(function(c) { c.checked = cb.checked; });
+    updateBatchBar();
+}
+function deselectAll() {
+    document.querySelectorAll('.student-checkbox').forEach(function(c) { c.checked = false; });
+    document.getElementById('selectAll').checked = false;
+    updateBatchBar();
+}
+function updateBatchBar() {
+    var n = document.querySelectorAll('.student-checkbox:checked').length;
+    var bar = document.getElementById('batchBar');
+    if (n > 0) {
+        bar.classList.remove('d-none');
+        bar.classList.add('d-flex');
+        document.getElementById('batchCount').textContent = n;
+    } else {
+        bar.classList.add('d-none');
+        bar.classList.remove('d-flex');
+    }
+}
+// Update batch bar on any checkbox change
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('student-checkbox')) updateBatchBar();
+});
+function toggleDorm(sel, sid) {
+    var td = document.getElementById('dorm-' + sid);
+    if (sel.value === '住校') {
+        td.innerHTML = '<input type="text" class="form-control form-control-sm quick-input" data-id="' + sid + '" data-field="dormitory" value="" style="font-size:12px;padding:1px 4px;width:100%">';
+    } else {
+        td.innerHTML = '<span class="text-muted" style="font-size:11px">—</span>';
+    }
 }
 function confirmBatch() {
     var n = document.querySelectorAll('.student-checkbox:checked').length;
     if (n === 0) { alert('请先勾选学生'); return false; }
     return confirm('确定删除选中的 ' + n + ' 名学生？');
+}
+function batchWithdraw() {
+    var cbs = document.querySelectorAll('.student-checkbox:checked');
+    if (cbs.length === 0) { alert('请先勾选学生'); return; }
+    var html = '<p>请为每位学生填写流失原因：</p>';
+    cbs.forEach(function(cb) {
+        var sid = cb.value;
+        var name = cb.closest('tr').querySelector('td:nth-child(2)').textContent.trim();
+        html += '<div class="mb-2 row align-items-center">' +
+            '<div class="col-2"><strong>' + name + '</strong></div>' +
+            '<div class="col-10"><input type="text" name="reason_' + sid + '" class="form-control form-control-sm" placeholder="流失原因（必填）" required></div>' +
+            '</div>';
+        // Pass student ID as hidden input
+        html += '<input type="hidden" name="ids" value="' + sid + '">';
+    });
+    html += '<input type="hidden" name="action" value="withdraw">';
+    document.getElementById('withdrawModalBody').innerHTML = html;
+    var m = new bootstrap.Modal(document.getElementById('withdrawModal'));
+    m.show();
 }
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('quick-edit')) {

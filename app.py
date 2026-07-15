@@ -2077,6 +2077,7 @@ def training():
     sem_id = get_current_semester_id()
     projects = get_semester_projects()
     students = get_semester_students()
+    q = TrainingRecord.query
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     recent_records = q.order_by(TrainingRecord.created_at.desc()).limit(30).all()
@@ -3821,6 +3822,9 @@ if __name__ == '__main__':
             for col, typ in [('withdrawn_reason','TEXT')]:
                 try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
                 except: pass
+            # 迁移 subject 表
+            try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
+            except: pass
             conn.commit(); conn.close()
         except: pass
         # 创建默认学期（仅当没有学期且明确需要时）

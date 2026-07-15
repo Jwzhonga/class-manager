@@ -134,6 +134,9 @@ function showImportModal() {
                             <h6 class="mb-1" style="color:#1a1a1a;font-weight:600;">{{ item.subject.name }}</h6>
                             <small class="text-muted">
                                 <i class="fas fa-user-tie"></i> {{ item.subject.teacher or '未设置教师' }}
+                                {% if item.subject.class_name %}
+                                · <i class="fas fa-school"></i> {{ item.subject.class_name }}
+                                {% endif %}
                             </small>
                         </div>
                         <span class="badge bg-primary rounded-pill">{{ item.student_count }}人</span>
@@ -178,6 +181,10 @@ function showImportModal() {
                     <div class="mb-3">
                         <label class="form-label">任课教师</label>
                         <input type="text" name="teacher" class="form-control" placeholder="输入教师姓名">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">班级名称</label>
+                        <input type="text" name="class_name" class="form-control" placeholder="如：24新能源班">
                     </div>
                 </div>
                 <div class="modal-footer">

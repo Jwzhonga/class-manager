@@ -320,6 +320,7 @@ class Subject(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=False, nullable=False)
     teacher = db.Column(db.String(32), default='')
+    class_name = db.Column(db.String(64), default='')  # 班级名称
     semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
@@ -2076,8 +2077,6 @@ def training():
     sem_id = get_current_semester_id()
     projects = get_semester_projects()
     students = get_semester_students()
-    
-    q = TrainingRecord.query
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     recent_records = q.order_by(TrainingRecord.created_at.desc()).limit(30).all()
@@ -2219,11 +2218,15 @@ def training_record_add():
 @app.route('/training/groups')
 def training_groups():
     sem_id = get_current_semester_id()
-    q = TrainingGroup.query
-    if sem_id:
-        q = q.filter_by(semester_id=sem_id)
-    groups = q.order_by(TrainingGroup.id).all()
-    students = get_semester_students()
+    groups = TrainingGroup.query.filter_by(semester_id=sem_id).order_by(TrainingGroup.id).all()
+    all_students = get_semester_students()
+    # 已分配到任何分组的学生ID集合
+    assigned_ids = set()
+    for g in groups:
+        for s in g.students:
+            assigned_ids.add(s.id)
+    # 未分配的学生（未被任何分组选中的学生）
+    students = [s for s in all_students if s.id not in assigned_ids and s.status != 'withdrawn']
     return render_template('training_groups.html', groups=groups, students=students)
 
 
@@ -3446,6 +3449,7 @@ def teaching_add_course():
     """添加任课科目（名称+教师）"""
     name = request.form.get('name', '').strip()
     teacher = request.form.get('teacher', '').strip()
+    class_name = request.form.get('class_name', '').strip()
     if not name:
         flash('请输入科目名称')
         return redirect(url_for('teaching'))

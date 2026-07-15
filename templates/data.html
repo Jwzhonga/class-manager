@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="page-title"><i class="fas fa-database me-2"></i>数据管理</div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="alert alert-info alert-dismissible fade show">
+        {% for msg in messages %}{{ msg }}{% endfor %}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- 当前数据库信息 -->
+    <div class="card mb-4">
+        <div class="card-header"><i class="fas fa-info-circle me-2"></i>当前数据库信息</div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-card">
+                        <div class="number" style="font-size:22px;">{{ stats.db_size }}</div>
+                        <div class="label">数据库大小</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-card">
+                        <div class="number" style="font-size:22px;">{{ stats.student_count }}</div>
+                        <div class="label">学生总数</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-card">
+                        <div class="number" style="font-size:22px;">{{ stats.semester_count }}</div>
+                        <div class="label">学期数</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-card">
+                        <div class="number" style="font-size:22px;">{{ stats.attendance_count }}</div>
+                        <div class="label">考勤记录</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.grade_count }}</div>
+                        <div class="label" style="font-size:12px;">成绩记录</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.discipline_count }}</div>
+                        <div class="label" style="font-size:12px;">处分记录</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.violation_count }}</div>
+                        <div class="label" style="font-size:12px;">违纪记录</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.fund_count }}</div>
+                        <div class="label" style="font-size:12px;">班费记录</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.schedule_count }}</div>
+                        <div class="label" style="font-size:12px;">课表条目</div>
+                    </div>
+                </div>
+                <div class="col-md-2 col-4 mb-2">
+                    <div class="stat-card" style="padding:12px;">
+                        <div class="number" style="font-size:18px;">{{ stats.training_record_count }}</div>
+                        <div class="label" style="font-size:12px;">实训记录</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 导出区域 -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-download me-2"></i>全量导出</div>
+                <div class="card-body text-center py-5">
+                    <p class="text-muted mb-4">直接下载当前数据库文件（.db格式），可用于备份或迁移</p>
+                    <a href="{{ url_for('data_export') }}" class="btn btn-success btn-lg px-5">
+                        <i class="fas fa-database me-2"></i>下载全量数据
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 手动备份 -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-archive me-2"></i>手动备份</div>
+                <div class="card-body text-center py-5">
+                    <p class="text-muted mb-4">生成带时间戳的备份文件，保存到服务器端 <code>static/backups/</code> 目录</p>
+                    <form method="post" action="{{ url_for('data_export_backup') }}">
+                        <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <i class="fas fa-save me-2"></i>创建备份
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史备份列表 -->
+    <div class="card mb-4">
+        <div class="card-header"><i class="fas fa-history me-2"></i>历史备份列表</div>
+        <div class="card-body">
+            {% if backups %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sortable">
+                    <thead>
+                        <tr>
+                            <th>文件名</th>
+                            <th>大小</th>
+                            <th>创建时间</th>
+                            <th class="text-center" style="width:200px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in backups %}
+                        <tr>
+                            <td><code>{{ b.name }}</code></td>
+                            <td>{{ b.size }}</td>
+                            <td>{{ b.mtime }}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('data_backup_download', filename=b.name) }}" class="btn btn-sm btn-outline-success me-1" title="下载">
+                                    <i class="fas fa-download"></i> 下载
+                                </a>
+                                <form method="post" action="{{ url_for('data_backup_delete', filename=b.name) }}" style="display:inline;" onsubmit="return confirm('确定删除备份文件「{{ b.name }}」？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                        <i class="fas fa-trash"></i> 删除
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                <p>暂无历史备份文件</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 恢复数据 -->
+    <div class="card mb-4 border-warning">
+        <div class="card-header text-warning"><i class="fas fa-upload me-2"></i>恢复数据</div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>警告：</strong>恢复数据将替换当前所有数据。操作前系统会自动创建当前数据库的备份。
+            </div>
+            <form method="post" action="{{ url_for('data_upload') }}" enctype="multipart/form-data" onsubmit="return confirm('恢复数据将替换当前所有数据，确定继续？')">
+                <div class="row align-items-end">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label fw-bold">选择备份文件（.db格式）</label>
+                        <input type="file" name="backup_file" class="form-control" accept=".db" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="fas fa-undo-alt me-2"></i>恢复数据
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

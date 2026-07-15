@@ -324,6 +324,18 @@ class Subject(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
+class CourseStudent(db.Model):
+    """任课管理 - 科目下的学生名单（独立于学生管理中的Student表）"""
+    __tablename__ = 'course_student'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    course = db.relationship('Subject', backref=db.backref('course_students', lazy='dynamic'))
+
+
 class Discipline(db.Model):
     __tablename__ = 'discipline'
     id = db.Column(db.Integer, primary_key=True)
@@ -380,11 +392,33 @@ class TrainingProject(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
+# 实训分组-学生 多对多关联表
+training_group_student = db.Table('training_group_student',
+    db.Column('group_id', db.Integer, db.ForeignKey('training_group.id'), primary_key=True),
+    db.Column('student_id', db.Integer, db.ForeignKey('student.id'), primary_key=True)
+)
+
+
+class TrainingGroup(db.Model):
+    __tablename__ = 'training_group'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    students = db.relationship('Student', secondary=training_group_student,
+                               backref=db.backref('training_groups', lazy='dynamic'),
+                               lazy='dynamic')
+    records = db.relationship('TrainingRecord', backref=db.backref('group', lazy='joined'),
+                              lazy='dynamic')
+
+
 class TrainingRecord(db.Model):
     __tablename__ = 'training_record'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('training_project.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('training_group.id'), nullable=True)
     score = db.Column(db.Float, default=0)
     quality_notes = db.Column(db.String(64), default='')
     completion_date = db.Column(db.Date, nullable=True)
@@ -416,6 +450,28 @@ class ScheduleImage(db.Model):
     raw_text = db.Column(db.Text, default='')
     ocr_result = db.Column(db.Text, default='')  # JSON string
     created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class Seat(db.Model):
+    __tablename__ = 'seat'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False)  # 座位名称如"第1排第1列"
+    row_num = db.Column(db.Integer, nullable=False)
+    col_num = db.Column(db.Integer, nullable=False)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class SeatAssignment(db.Model):
+    __tablename__ = 'seat_assignment'
+    id = db.Column(db.Integer, primary_key=True)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seat.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=False)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    seat = db.relationship('Seat', backref=db.backref('assignments', lazy='dynamic'))
+    student = db.relationship('Student', backref=db.backref('seat_assignments', lazy='dynamic'))
 
 
 # 创建所有表
@@ -748,6 +804,7 @@ def semester_delete(id):
     TrainingRecord.query.filter_by(semester_id=id).delete()
     ViolationRecord.query.filter_by(semester_id=id).delete()
     ClassFund.query.filter_by(semester_id=id).delete()
+    CourseStudent.query.filter_by(semester_id=id).delete()
     Subject.query.filter_by(semester_id=id).delete()
     TrainingProject.query.filter_by(semester_id=id).delete()
     Schedule.query.filter_by(semester_id=id).delete()
@@ -2037,9 +2094,15 @@ def training():
                 key = f'{s.id}_{p.id}'
                 latest_map[key] = record
 
+    gq = TrainingGroup.query
+    if sem_id:
+        gq = gq.filter_by(semester_id=sem_id)
+    groups = gq.order_by(TrainingGroup.id).all()
+
     return render_template('training.html',
                           projects=projects,
                           students=students,
+                          groups=groups,
                           recent_records=recent_records,
                           latest_map=latest_map,
                           now=datetime.now())
@@ -2081,6 +2144,7 @@ def training_project_delete(id):
 
 @app.route('/training/record', methods=['POST'])
 def training_record_add():
+    group_id = request.form.get('group_id')
     student_id = request.form.get('student_id')
     project_id = request.form.get('project_id')
     score = request.form.get('score', '0')
@@ -2089,7 +2153,6 @@ def training_record_add():
     instructor_notes = request.form.get('instructor_notes', '')
 
     try:
-        student_id = int(student_id)
         project_id = int(project_id)
         score = float(score)
     except (ValueError, TypeError):
@@ -2101,16 +2164,110 @@ def training_record_add():
     except ValueError:
         completion_date = None
 
-    record = TrainingRecord(
-        student_id=student_id, project_id=project_id, score=score,
-        quality_notes=quality_notes, completion_date=completion_date,
-        instructor_notes=instructor_notes,
-        semester_id=get_current_semester_id()
-    )
-    db.session.add(record)
-    db.session.commit()
-    flash('实训记录已添加')
+    sem_id = get_current_semester_id()
+
+    # 如果选择了分组，为组内所有学生创建实训记录
+    if group_id:
+        try:
+            group_id = int(group_id)
+        except (ValueError, TypeError):
+            flash('参数错误')
+            return redirect(url_for('training'))
+        group = TrainingGroup.query.get(group_id)
+        if not group:
+            flash('分组不存在')
+            return redirect(url_for('training'))
+        students = group.students.all()
+        if not students:
+            flash('该分组没有成员')
+            return redirect(url_for('training'))
+        count = 0
+        for s in students:
+            record = TrainingRecord(
+                student_id=s.id, project_id=project_id, score=score,
+                quality_notes=quality_notes, completion_date=completion_date,
+                instructor_notes=instructor_notes,
+                group_id=group_id, semester_id=sem_id
+            )
+            db.session.add(record)
+            count += 1
+        db.session.commit()
+        flash(f'已为分组 "{group.name}" 的 {count} 名学生添加实训记录')
+    else:
+        # 传统方式：为单个学生添加记录
+        try:
+            student_id = int(student_id)
+        except (ValueError, TypeError):
+            flash('请选择学生或分组')
+            return redirect(url_for('training'))
+        record = TrainingRecord(
+            student_id=student_id, project_id=project_id, score=score,
+            quality_notes=quality_notes, completion_date=completion_date,
+            instructor_notes=instructor_notes,
+            semester_id=sem_id
+        )
+        db.session.add(record)
+        db.session.commit()
+        flash('实训记录已添加')
     return redirect(url_for('training'))
+
+
+# ══════════════════════════════════════════════
+# 实训分组管理
+# ══════════════════════════════════════════════
+
+@app.route('/training/groups')
+def training_groups():
+    sem_id = get_current_semester_id()
+    q = TrainingGroup.query
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    groups = q.order_by(TrainingGroup.id).all()
+    students = get_semester_students()
+    return render_template('training_groups.html', groups=groups, students=students)
+
+
+@app.route('/training/groups/add', methods=['POST'])
+def training_group_add():
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('请输入分组名称')
+        return redirect(url_for('training_groups'))
+    sem_id = get_current_semester_id()
+    group = TrainingGroup(name=name, semester_id=sem_id)
+    db.session.add(group)
+    db.session.commit()
+    flash(f'实训分组 "{name}" 已创建')
+    return redirect(url_for('training_groups'))
+
+
+@app.route('/training/groups/<int:id>/delete', methods=['POST'])
+def training_group_delete(id):
+    group = TrainingGroup.query.get_or_404(id)
+    name = group.name
+    # 不删除组内学生的历史实训记录，只删除分组本身
+    db.session.delete(group)
+    db.session.commit()
+    flash(f'实训分组 "{name}" 已删除')
+    return redirect(url_for('training_groups'))
+
+
+@app.route('/training/groups/<int:id>/students', methods=['POST'])
+def training_group_students(id):
+    group = TrainingGroup.query.get_or_404(id)
+    student_ids = request.form.getlist('student_ids')
+    # 清空原有成员，重新添加
+    group.students = []
+    for sid in student_ids:
+        try:
+            s = Student.query.get(int(sid))
+            if s:
+                group.students.append(s)
+        except (ValueError, TypeError):
+            pass
+    db.session.commit()
+    flash(f'已为 "{group.name}" 更新成员（共 {len(student_ids)} 人）')
+    return redirect(url_for('training_groups'))
 
 
 @app.route('/training/stats')
@@ -2139,6 +2296,261 @@ def training_stats():
         })
     return render_template('training_stats.html',
                           students=data, projects=projects)
+
+
+# ══════════════════════════════════════════════
+# 座位管理
+# ══════════════════════════════════════════════
+
+
+@app.route('/seat')
+def seat_view():
+    """座位管理主页面"""
+    sem_id = get_current_semester_id()
+    seats = Seat.query
+    if sem_id:
+        seats = seats.filter_by(semester_id=sem_id)
+    seats = seats.order_by(Seat.row_num, Seat.col_num).all()
+
+    assignments = {}
+    assign_q = SeatAssignment.query
+    if sem_id:
+        assign_q = assign_q.filter_by(semester_id=sem_id)
+    for a in assign_q.all():
+        assignments[a.seat_id] = a
+
+    students = get_semester_students()
+
+    # 获取未安排的学生
+    assigned_student_ids = {a.student_id for a in assignments.values()}
+    unassigned_students = [s for s in students if s.id not in assigned_student_ids]
+
+    # 获取行数和列数
+    max_rows = max((s.row_num for s in seats), default=0)
+    max_cols = max((s.col_num for s in seats), default=0)
+
+    # 构建网格
+    grid = []
+    for r in range(1, max_rows + 1):
+        row = []
+        for c in range(1, max_cols + 1):
+            seat = next((s for s in seats if s.row_num == r and s.col_num == c), None)
+            if seat:
+                assignment = assignments.get(seat.id)
+                row.append({
+                    'seat': seat,
+                    'assignment': assignment,
+                    'student': assignment.student if assignment else None,
+                })
+            else:
+                row.append(None)
+        grid.append(row)
+
+    return render_template('seat.html',
+                          grid=grid,
+                          max_rows=max_rows,
+                          max_cols=max_cols,
+                          unassigned_students=unassigned_students,
+                          seats=seats)
+
+
+@app.route('/seat/setup', methods=['POST'])
+def seat_setup():
+    """初始化座位：批量创建Seat记录"""
+    sem_id = get_current_semester_id()
+    if not sem_id:
+        flash('请先选择学期')
+        return redirect(url_for('seat_view'))
+
+    try:
+        rows = int(request.form.get('rows', 0))
+        cols = int(request.form.get('cols', 0))
+    except (ValueError, TypeError):
+        flash('请输入有效的行数和列数')
+        return redirect(url_for('seat_view'))
+
+    if rows < 1 or cols < 1 or rows > 50 or cols > 50:
+        flash('行数和列数应在1-50之间')
+        return redirect(url_for('seat_view'))
+
+    # 删除当前学期的所有座位及安排
+    SeatAssignment.query.filter_by(semester_id=sem_id).delete()
+    Seat.query.filter_by(semester_id=sem_id).delete()
+    db.session.commit()
+
+    # 批量创建座位
+    for r in range(1, rows + 1):
+        for c in range(1, cols + 1):
+            seat = Seat(
+                name=f'第{r}排第{c}列',
+                row_num=r,
+                col_num=c,
+                semester_id=sem_id
+            )
+            db.session.add(seat)
+
+    db.session.commit()
+    flash(f'已创建 {rows}x{cols} = {rows * cols} 个座位')
+    return redirect(url_for('seat_view'))
+
+
+@app.route('/seat/assign', methods=['POST'])
+def seat_assign():
+    """安排学生入座"""
+    sem_id = get_current_semester_id()
+    if not sem_id:
+        return jsonify({'ok': False, 'error': '请先选择学期'})
+
+    seat_id = request.form.get('seat_id', type=int)
+    student_id = request.form.get('student_id', type=int)
+
+    if not seat_id or not student_id:
+        return jsonify({'ok': False, 'error': '参数不完整'})
+
+    # 验证座位属于当前学期
+    seat = Seat.query.get(seat_id)
+    if not seat or (sem_id and seat.semester_id != sem_id):
+        return jsonify({'ok': False, 'error': '座位不存在'})
+
+    # 验证学生属于当前学期
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({'ok': False, 'error': '学生不存在'})
+
+    # 清除该学生的其他座位安排（一学生一座）
+    SeatAssignment.query.filter_by(student_id=student_id, semester_id=sem_id).delete()
+
+    # 清除该座位的旧安排
+    SeatAssignment.query.filter_by(seat_id=seat_id, semester_id=sem_id).delete()
+
+    # 创建新安排
+    assignment = SeatAssignment(
+        seat_id=seat_id,
+        student_id=student_id,
+        semester_id=sem_id
+    )
+    db.session.add(assignment)
+    db.session.commit()
+
+    return jsonify({'ok': True, 'student_name': student.name})
+
+
+@app.route('/seat/swap', methods=['POST'])
+def seat_swap():
+    """拖动交换座位"""
+    sem_id = get_current_semester_id()
+    if not sem_id:
+        return jsonify({'ok': False, 'error': '请先选择学期'})
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'ok': False, 'error': '无数据'})
+
+    seat_id_1 = data.get('seat_id_1')
+    seat_id_2 = data.get('seat_id_2')
+
+    if not seat_id_1 or not seat_id_2:
+        return jsonify({'ok': False, 'error': '参数不完整'})
+
+    if seat_id_1 == seat_id_2:
+        return jsonify({'ok': False, 'error': '不能与自己交换'})
+
+    # 获取两个座位的当前安排
+    a1 = SeatAssignment.query.filter_by(seat_id=seat_id_1, semester_id=sem_id).first()
+    a2 = SeatAssignment.query.filter_by(seat_id=seat_id_2, semester_id=sem_id).first()
+
+    if not a1 and not a2:
+        return jsonify({'ok': True, 'swapped': False, 'message': '两个座位均空'})
+
+    if a1 and a2:
+        # 互换学生
+        temp_student_id = a1.student_id
+        a1.student_id = a2.student_id
+        a2.student_id = temp_student_id
+        db.session.commit()
+        return jsonify({
+            'ok': True, 'swapped': True,
+            'student1_name': a1.student.name if a1.student else None,
+            'student2_name': a2.student.name if a2.student else None,
+        })
+    elif a1 and not a2:
+        # 座位2空 → 把座位1的学生移到座位2，清空座位1
+        a2 = SeatAssignment(seat_id=seat_id_2, student_id=a1.student_id, semester_id=sem_id)
+        db.session.add(a2)
+        db.session.delete(a1)
+        db.session.commit()
+        return jsonify({
+            'ok': True, 'swapped': False,
+            'student_name': a2.student.name if a2.student else None,
+            'from_seat': seat_id_1, 'to_seat': seat_id_2,
+        })
+    else:
+        # 座位1空，座位2有人 → 移到座位1
+        a1 = SeatAssignment(seat_id=seat_id_1, student_id=a2.student_id, semester_id=sem_id)
+        db.session.add(a1)
+        db.session.delete(a2)
+        db.session.commit()
+        return jsonify({
+            'ok': True, 'swapped': False,
+            'student_name': a1.student.name if a1.student else None,
+            'from_seat': seat_id_2, 'to_seat': seat_id_1,
+        })
+
+
+@app.route('/seat/clear', methods=['POST'])
+def seat_clear():
+    """清空所有座位安排"""
+    sem_id = get_current_semester_id()
+    if sem_id:
+        SeatAssignment.query.filter_by(semester_id=sem_id).delete()
+        db.session.commit()
+        flash('所有座位安排已清空')
+    return redirect(url_for('seat_view'))
+
+
+@app.route('/seat/auto', methods=['POST'])
+def seat_auto():
+    """自动排座：随机安排所有未安排的学生"""
+    sem_id = get_current_semester_id()
+    if not sem_id:
+        flash('请先选择学期')
+        return redirect(url_for('seat_view'))
+
+    # 获取所有空座位
+    seats = Seat.query.filter_by(semester_id=sem_id).order_by(Seat.row_num, Seat.col_num).all()
+    assigned_seat_ids = {a.seat_id for a in SeatAssignment.query.filter_by(semester_id=sem_id).all()}
+    empty_seats = [s for s in seats if s.id not in assigned_seat_ids]
+
+    if not empty_seats:
+        flash('没有空座位可供安排')
+        return redirect(url_for('seat_view'))
+
+    # 获取所有未安排的学生
+    students = get_semester_students()
+    assigned_student_ids = {a.student_id for a in SeatAssignment.query.filter_by(semester_id=sem_id).all()}
+    unassigned = [s for s in students if s.id not in assigned_student_ids]
+
+    if not unassigned:
+        flash('所有学生已安排座位')
+        return redirect(url_for('seat_view'))
+
+    # 随机打乱并分配
+    random.shuffle(unassigned)
+    random.shuffle(empty_seats)
+
+    count = 0
+    for student, seat in zip(unassigned, empty_seats):
+        assignment = SeatAssignment(
+            seat_id=seat.id,
+            student_id=student.id,
+            semester_id=sem_id
+        )
+        db.session.add(assignment)
+        count += 1
+
+    db.session.commit()
+    flash(f'自动排座完成：已安排 {count} 名学生')
+    return redirect(url_for('seat_view'))
 
 
 # ══════════════════════════════════════════════
@@ -2892,7 +3304,183 @@ def export_grades():
     return send_file(buf, as_attachment=True, download_name=f'{current_subject}_综合评价_{date.today().isoformat()}.xlsx')
 
 
+# ── 任课管理 ──
+# ══════════════════════════════════════════════
+
+@app.route('/teaching')
+@login_required
+def teaching():
+    """任课管理主页面：显示当前学期的科目列表（卡片式）"""
+    sem_id = get_current_semester_id()
+    q = Subject.query
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    subjects = q.order_by(Subject.id).all()
+    # 每个科目统计学生人数
+    subject_data = []
+    for sub in subjects:
+        count_q = CourseStudent.query.filter_by(course_id=sub.id)
+        if sem_id:
+            count_q = count_q.filter_by(semester_id=sem_id)
+        student_count = count_q.count()
+        subject_data.append({
+            'subject': sub,
+            'student_count': student_count
+        })
+    return render_template('teaching.html', subject_data=subject_data)
+
+
+@app.route('/teaching/<int:course_id>/students')
+@login_required
+def teaching_students(course_id):
+    """查看某科目的学生列表"""
+    sem_id = get_current_semester_id()
+    subject = Subject.query.get_or_404(course_id)
+    q = CourseStudent.query.filter_by(course_id=course_id)
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    students = q.order_by(CourseStudent.id).all()
+    return render_template('teaching.html', subject=subject, students=students)
+
+
+@app.route('/teaching/<int:course_id>/import', methods=['POST'])
+@login_required
+def teaching_import(course_id):
+    """导入学生：文本批量输入 或 Excel导入"""
+    sem_id = get_current_semester_id()
+    subject = Subject.query.get_or_404(course_id)
+    count = 0
+
+    # 方式1：文本框批量导入（每行一个姓名）
+    names_text = request.form.get('names', '').strip()
+    if names_text:
+        names = [n.strip() for n in names_text.split('\n') if n.strip()]
+        for name in names:
+            # 检查是否已存在该学生
+            existing = CourseStudent.query.filter_by(
+                name=name, course_id=course_id, semester_id=sem_id
+            ).first()
+            if not existing:
+                cs = CourseStudent(name=name, course_id=course_id,
+                                   semester_id=sem_id)
+                db.session.add(cs)
+                count += 1
+        if count:
+            db.session.commit()
+            flash(f'成功导入 {count} 名学生到「{subject.name}」')
+        else:
+            flash('未导入任何学生（可能已全部存在）')
+        return redirect(url_for('teaching_students', course_id=course_id))
+
+    # 方式2：Excel导入
+    file = request.files.get('file')
+    if file and file.filename:
+        filename = file.filename.lower()
+        if not (filename.endswith('.xls') or filename.endswith('.xlsx')):
+            flash('请上传Excel文件 (.xls/.xlsx)')
+            return redirect(url_for('teaching_students', course_id=course_id))
+
+        import tempfile
+        import os
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+        file.save(tmp.name)
+        tmp.close()
+        try:
+            names = []
+            if filename.endswith('.xls'):
+                import xlrd
+                wb = xlrd.open_workbook(tmp.name)
+                sheet = wb.sheet_by_index(0)
+                for r in range(sheet.nrows):
+                    val = str(sheet.cell_value(r, 0)).strip()
+                    if val:
+                        names.append(val)
+            else:
+                from openpyxl import load_workbook
+                wb = load_workbook(tmp.name, read_only=True, data_only=True)
+                ws = wb.active
+                for row in ws.iter_rows(values_only=True):
+                    if row[0] is not None:
+                        val = str(row[0]).strip()
+                        if val:
+                            names.append(val)
+                wb.close()
+            for name in names:
+                existing = CourseStudent.query.filter_by(
+                    name=name, course_id=course_id, semester_id=sem_id
+                ).first()
+                if not existing:
+                    cs = CourseStudent(name=name, course_id=course_id,
+                                       semester_id=sem_id)
+                    db.session.add(cs)
+                    count += 1
+            if count:
+                db.session.commit()
+                flash(f'从Excel成功导入 {count} 名学生到「{subject.name}」')
+            else:
+                flash('Excel中未找到有效学生数据或已全部存在')
+        except Exception as e:
+            flash(f'Excel解析失败: {e}')
+        finally:
+            os.unlink(tmp.name)
+        return redirect(url_for('teaching_students', course_id=course_id))
+
+    flash('请提供学生姓名（文本框输入）或上传Excel文件')
+    return redirect(url_for('teaching_students', course_id=course_id))
+
+
+@app.route('/teaching/<int:course_id>/student/<int:id>/delete', methods=['POST'])
+@login_required
+def teaching_student_delete(course_id, id):
+    """删除任课科目下的某个学生"""
+    cs = CourseStudent.query.get_or_404(id)
+    db.session.delete(cs)
+    db.session.commit()
+    flash('已删除该学生')
+    return redirect(url_for('teaching_students', course_id=course_id))
+
+
+@app.route('/teaching/add-course', methods=['POST'])
+@login_required
+def teaching_add_course():
+    """添加任课科目（名称+教师）"""
+    name = request.form.get('name', '').strip()
+    teacher = request.form.get('teacher', '').strip()
+    if not name:
+        flash('请输入科目名称')
+        return redirect(url_for('teaching'))
+    # 检查当前学期是否已存在同名科目
+    sem_id = get_current_semester_id()
+    existing = Subject.query.filter_by(name=name, semester_id=sem_id).first()
+    if existing:
+        flash(f'科目「{name}」已存在')
+        return redirect(url_for('teaching'))
+    subject = Subject(name=name, teacher=teacher, semester_id=sem_id)
+    db.session.add(subject)
+    db.session.commit()
+    flash(f'科目「{name}」已添加，教师: {teacher or "未设置"}')
+    return redirect(url_for('teaching'))
+
+
+@app.route('/teaching/<int:id>/delete-course', methods=['POST'])
+@login_required
+def teaching_delete_course(id):
+    """删除科目及关联学生"""
+    subject = Subject.query.get_or_404(id)
+    name = subject.name
+    # 删除关联的CourseStudent
+    CourseStudent.query.filter_by(course_id=id).delete()
+    # 也清理成绩表中的该科目记录
+    Grade.query.filter_by(subject=name).delete()
+    db.session.delete(subject)
+    db.session.commit()
+    flash(f'科目「{name}」及其关联学生已删除')
+    return redirect(url_for('teaching'))
+
+
+# ══════════════════════════════════════════════
 # ── 科目管理 ──
+# ══════════════════════════════════════════════
 @app.route('/subject/add', methods=['POST'])
 def subject_add():
     name = request.form.get('name', '').strip()
@@ -2986,6 +3574,212 @@ def export_schedule():
     if fmt == 'pdf':
         return _export_pdf_generic('班级课表', headers, rows, '班级课表.pdf')
     return _export_excel_generic(headers, rows, '班级课表.xlsx')
+
+
+# ══════════════════════════════════════════════
+# 数据管理（全量导出+恢复）
+# ══════════════════════════════════════════════
+
+BACKUP_DIR = os.path.join(BASE_DIR, 'static', 'backups')
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+
+def _get_db_path():
+    """获取当前数据库文件的绝对路径"""
+    trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
+    if trim_pkgvar:
+        return os.path.join(trim_pkgvar, 'class_manager.db')
+    return os.path.join(BASE_DIR, 'instance', 'class_manager.db')
+
+
+def _get_db_size():
+    """获取数据库文件大小（人类可读）"""
+    path = _get_db_path()
+    if not os.path.exists(path):
+        return '文件不存在'
+    size = os.path.getsize(path)
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f'{size:.1f} {unit}'
+        size /= 1024
+    return f'{size:.1f} GB'
+
+
+@app.route('/data')
+@login_required
+def data_management():
+    """数据管理主页面"""
+    stats = {
+        'db_size': _get_db_size(),
+        'student_count': Student.query.count(),
+        'semester_count': Semester.query.count(),
+        'attendance_count': Attendance.query.count(),
+        'grade_count': Grade.query.count(),
+        'discipline_count': Discipline.query.count(),
+        'violation_count': ViolationRecord.query.count(),
+        'fund_count': ClassFund.query.count(),
+        'training_record_count': TrainingRecord.query.count(),
+        'schedule_count': Schedule.query.count(),
+        'subject_count': Subject.query.count(),
+    }
+
+    # 列出历史备份
+    backups = []
+    if os.path.exists(BACKUP_DIR):
+        for fname in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            fpath = os.path.join(BACKUP_DIR, fname)
+            if os.path.isfile(fpath) and fname.endswith('.db'):
+                mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
+                size = os.path.getsize(fpath)
+                size_str = ''
+                for unit in ['B', 'KB', 'MB', 'GB']:
+                    if size < 1024:
+                        size_str = f'{size:.1f} {unit}'
+                        break
+                    size /= 1024
+                backups.append({
+                    'name': fname,
+                    'size': size_str,
+                    'mtime': mtime.strftime('%Y-%m-%d %H:%M:%S'),
+                    'path': f'backups/{fname}',
+                })
+
+    return render_template('data.html', stats=stats, backups=backups)
+
+
+@app.route('/data/export')
+@login_required
+def data_export():
+    """全量导出 - 下载数据库文件"""
+    db_path = _get_db_path()
+    if not os.path.exists(db_path):
+        flash('数据库文件不存在')
+        return redirect(url_for('data_management'))
+    return send_file(
+        db_path,
+        mimetype='application/octet-stream',
+        as_attachment=True,
+        download_name='class_manager.db',
+        max_age=0
+    )
+
+
+@app.route('/data/export-backup', methods=['POST'])
+@login_required
+def data_export_backup():
+    """生成带时间戳的备份文件到 static/backups/"""
+    db_path = _get_db_path()
+    if not os.path.exists(db_path):
+        flash('数据库文件不存在')
+        return redirect(url_for('data_management'))
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = f'class_manager_backup_{timestamp}.db'
+    backup_path = os.path.join(BACKUP_DIR, backup_name)
+
+    try:
+        import shutil
+        shutil.copy2(db_path, backup_path)
+        flash(f'备份已创建：{backup_name}')
+    except Exception as e:
+        flash(f'备份失败：{e}')
+
+    return redirect(url_for('data_management'))
+
+
+@app.route('/data/upload', methods=['POST'])
+@login_required
+def data_upload():
+    """上传备份文件恢复数据"""
+    file = request.files.get('backup_file')
+    if not file:
+        flash('请选择要上传的备份文件')
+        return redirect(url_for('data_management'))
+
+    if not file.filename.endswith('.db'):
+        flash('请上传 .db 格式的备份文件')
+        return redirect(url_for('data_management'))
+
+    db_path = _get_db_path()
+
+    try:
+        # 先自动创建当前数据库的备份
+        if os.path.exists(db_path):
+            import shutil
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            auto_backup_name = f'auto_backup_before_restore_{timestamp}.db'
+            auto_backup_path = os.path.join(BACKUP_DIR, auto_backup_name)
+            shutil.copy2(db_path, auto_backup_path)
+
+        # 关闭所有数据库连接
+        db.session.remove()
+        db.engine.dispose()
+
+        # 用上传的.db文件替换现有数据库
+        file.save(db_path)
+
+        # 重新初始化数据库连接
+        from flask_sqlalchemy import SQLAlchemy
+
+        flash('数据已恢复！请重启应用以使更改生效。')
+    except Exception as e:
+        flash(f'数据恢复失败：{e}')
+
+    return redirect(url_for('data_management'))
+
+
+@app.route('/data/backups')
+@login_required
+def data_backups():
+    """列出所有历史备份文件（JSON）"""
+    backups = []
+    if os.path.exists(BACKUP_DIR):
+        for fname in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            fpath = os.path.join(BACKUP_DIR, fname)
+            if os.path.isfile(fpath) and fname.endswith('.db'):
+                mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
+                size = os.path.getsize(fpath)
+                backups.append({
+                    'name': fname,
+                    'size': size,
+                    'mtime': mtime.isoformat(),
+                })
+    return jsonify(backups)
+
+
+@app.route('/data/backups/<filename>/download')
+@login_required
+def data_backup_download(filename):
+    """下载指定的备份文件"""
+    safe_name = os.path.basename(filename)
+    backup_path = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.exists(backup_path):
+        flash('备份文件不存在')
+        return redirect(url_for('data_management'))
+    return send_file(
+        backup_path,
+        mimetype='application/octet-stream',
+        as_attachment=True,
+        download_name=safe_name,
+        max_age=0
+    )
+
+
+@app.route('/data/backups/<filename>/delete', methods=['POST'])
+@login_required
+def data_backup_delete(filename):
+    """删除指定的备份文件"""
+    safe_name = os.path.basename(filename)
+    backup_path = os.path.join(BACKUP_DIR, safe_name)
+    if os.path.exists(backup_path):
+        try:
+            os.remove(backup_path)
+            flash(f'备份文件 {safe_name} 已删除')
+        except Exception as e:
+            flash(f'删除失败：{e}')
+    else:
+        flash('备份文件不存在')
+    return redirect(url_for('data_management'))
 
 
 # ══════════════════════════════════════════════

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title"><i class="fas fa-layer-group"></i> 实训分组管理</h4>
+
+<div class="row g-3">
+    <!-- 左侧：新建分组 -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <span><i class="fas fa-plus-circle"></i> 新建分组</span>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/training/groups/add">
+                    <div class="mb-2">
+                        <label class="form-label">分组名称</label>
+                        <input type="text" name="name" class="form-control" placeholder="如：第一组、发动机维修组" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 创建分组</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 使用说明 -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <span><i class="fas fa-info-circle"></i> 使用说明</span>
+            </div>
+            <div class="card-body">
+                <ol class="mb-0" style="font-size:13px;padding-left:20px;">
+                    <li>创建实训分组</li>
+                    <li>点击分组卡片上的"添加成员"为学生配置组员</li>
+                    <li>在实训管理页面选择分组，即可一键为该组所有学生添加实训记录</li>
+                    <li>删除分组不会影响学生的历史实训记录</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：分组列表 -->
+    <div class="col-md-8">
+        <div class="row g-3">
+            {% for g in groups %}
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-users"></i> <strong>{{ g.name }}</strong></span>
+                        <span class="badge bg-info">{{ g.students.count() }} 人</span>
+                    </div>
+                    <div class="card-body">
+                        {% set members = g.students.all() %}
+                        {% if members %}
+                        <div class="mb-2">
+                            <small class="text-muted">成员：</small>
+                            <div>
+                                {% for s in members %}
+                                <span class="badge bg-secondary me-1 mb-1">{{ s.name }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center mb-2"><small>暂无成员，点击下方添加</small></p>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer d-flex justify-content-between gap-2">
+                        <button class="btn btn-sm btn-outline-primary flex-grow-1" data-bs-toggle="modal" data-bs-target="#studentModal{{ g.id }}">
+                            <i class="fas fa-user-plus"></i> 添加成员
+                        </button>
+                        <form method="post" action="/training/groups/{{ g.id }}/delete" onsubmit="return confirm('确定删除分组「{{ g.name }}」吗？组内学生的历史实训记录不受影响。')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 添加成员弹窗 -->
+            <div class="modal fade" id="studentModal{{ g.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <form class="modal-content" method="post" action="/training/groups/{{ g.id }}/students">
+                        <div class="modal-header">
+                            <h6 class="modal-title"><i class="fas fa-user-plus"></i> 为「{{ g.name }}」添加成员</h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" style="max-height:400px;overflow-y:auto;">
+                            <div class="mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(this, '{{ g.id }}')">全选/取消</button>
+                            </div>
+                            {% set member_ids = g.students.all()|map(attribute='id')|list %}
+                            {% for s in students %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="student_ids" value="{{ s.id }}"
+                                       id="stu_{{ g.id }}_{{ s.id }}"
+                                       {% if s.id in member_ids %}checked{% endif %}>
+                                <label class="form-check-label" for="stu_{{ g.id }}_{{ s.id }}">
+                                    {{ s.name }}
+                                </label>
+                            </div>
+                            {% else %}
+                            <p class="text-muted text-center">暂无学生，请先添加学生</p>
+                            {% endfor %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 保存成员</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center text-muted py-5">
+                        <i class="fas fa-layer-group" style="font-size:48px;opacity:0.3;"></i>
+                        <p class="mt-3">暂无实训分组，请先在左侧创建分组</p>
+                        <p><small>创建分组后可以为分组添加学生，然后在实训管理页面选择分组批量录入成绩</small></p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAll(btn, groupId) {
+    const checkboxes = document.querySelectorAll('#studentModal' + groupId + ' input[name="student_ids"]');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => cb.checked = !allChecked);
+}
+</script>
+{% endblock %}

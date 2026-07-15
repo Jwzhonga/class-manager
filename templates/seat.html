@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.seat-grid { display: inline-block; margin: 0 auto; }
+.seat-grid table { border-collapse: separate; border-spacing: 8px; }
+.seat-cell {
+    width: 100px; height: 80px; border: 2px solid #d9d9d9;
+    border-radius: 8px; text-align: center; vertical-align: middle;
+    cursor: pointer; transition: all 0.2s; position: relative;
+    background: #fff; user-select: none;
+}
+.seat-cell.occupied { background: #e6f7ff; border-color: #1890ff; }
+.seat-cell.occupied:hover { background: #bae7ff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,144,255,0.2); }
+.seat-cell.empty { background: #fafafa; border-style: dashed; }
+.seat-cell.empty:hover { background: #f0f0f0; border-color: #999; }
+.seat-cell.drag-over { border-color: #52c41a; background: #f6ffed; transform: scale(1.05); }
+.seat-cell.dragging { opacity: 0.4; }
+.seat-name { font-size: 11px; color: #999; position: absolute; top: 2px; left: 6px; }
+.seat-student { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-top: 10px; }
+.seat-empty-text { font-size: 12px; color: #bbb; margin-top: 14px; }
+
+.unassigned-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.unassigned-item {
+    display: inline-block; padding: 6px 14px; background: #fff;
+    border: 1px solid #d9d9d9; border-radius: 16px; cursor: grab;
+    font-size: 13px; transition: all 0.2s;
+}
+.unassigned-item:hover { border-color: #1890ff; color: #1890ff; background: #e6f7ff; }
+.unassigned-item.dragging { opacity: 0.4; }
+
+.seat-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.seat-toolbar .form-control { width: 80px; display: inline-block; }
+.seat-toolbar .btn { white-space: nowrap; }
+.select-student-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1050; display: none; align-items: center; justify-content: center; }
+.select-student-modal.show { display: flex; }
+.select-student-modal .modal-content { background: #fff; border-radius: 8px; padding: 20px; min-width: 300px; max-height: 70vh; overflow-y: auto; }
+.select-student-modal .student-option { padding: 8px 12px; cursor: pointer; border-radius: 4px; }
+.select-student-modal .student-option:hover { background: #e6f7ff; }
+</style>
+
+<div class="page-title"><i class="fas fa-chair"></i> 💺 座位管理</div>
+
+{% if max_rows == 0 or max_cols == 0 %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> 当前学期尚未设置座位。请先输入行数和列数初始化座位网格。
+</div>
+{% endif %}
+
+<form class="seat-toolbar" method="post" action="{{ url_for('seat_setup') }}">
+    <span><strong>座位网格：</strong></span>
+    <input type="number" name="rows" class="form-control form-control-sm" placeholder="行数" min="1" max="50" value="{{ max_rows or '' }}">
+    <span>×</span>
+    <input type="number" name="cols" class="form-control form-control-sm" placeholder="列数" min="1" max="50" value="{{ max_cols or '' }}">
+    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-table"></i> 初始化座位</button>
+
+    <div class="ms-auto d-flex gap-2">
+        <form method="post" action="{{ url_for('seat_auto') }}" style="display:inline">
+            <button type="submit" class="btn btn-success btn-sm" {% if max_rows == 0 %}disabled{% endif %}>
+                <i class="fas fa-random"></i> 自动排座
+            </button>
+        </form>
+        <form method="post" action="{{ url_for('seat_clear') }}" style="display:inline"
+              onsubmit="return confirm('确定清空所有座位安排吗？')">
+            <button type="submit" class="btn btn-danger btn-sm" {% if max_rows == 0 %}disabled{% endif %}>
+                <i class="fas fa-eraser"></i> 清空座位
+            </button>
+        </form>
+    </div>
+</form>
+
+{% if max_rows > 0 and max_cols > 0 %}
+<div class="text-center mb-2" style="font-size:13px;color:#666">
+    拖拽学生姓名可交换座位，将下方未安排学生拖到空座位上可安排入座
+</div>
+
+<div class="text-center">
+    <div class="seat-grid">
+        <table>
+            {% for row in grid %}
+            <tr>
+                {% for cell in row %}
+                {% if cell %}
+                <td>
+                    <div class="seat-cell {% if cell.student %}occupied{% else %}empty{% endif %}"
+                         data-seat-id="{{ cell.seat.id }}"
+                         draggable="true"
+                         ondragstart="onDragStart(event, {{ cell.seat.id }}, '{% if cell.student %}{{ cell.student.name }}{% endif %}')"
+                         ondragover="onDragOver(event)"
+                         ondragleave="onDragLeave(event)"
+                         ondrop="onDrop(event, {{ cell.seat.id }})"
+                         onclick="onSeatClick(event, {{ cell.seat.id }})">
+                        <div class="seat-name">{{ cell.seat.name }}</div>
+                        {% if cell.student %}
+                        <div class="seat-student" data-student-id="{{ cell.student.id }}">{{ cell.student.name }}</div>
+                        {% else %}
+                        <div class="seat-empty-text">空座</div>
+                        {% endif %}
+                    </div>
+                </td>
+                {% else %}
+                <td><div style="width:100px;height:80px;"></div></td>
+                {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<hr>
+<h6><i class="fas fa-users"></i> 未安排的学生（拖拽到空座位上）</h6>
+<div class="unassigned-list" id="unassignedList">
+    {% for s in unassigned_students %}
+    <div class="unassigned-item"
+         draggable="true"
+         ondragstart="onUnassignedDragStart(event, {{ s.id }}, '{{ s.name }}')"
+         data-student-id="{{ s.id }}"
+         data-student-name="{{ s.name }}">
+        {{ s.name }}
+    </div>
+    {% endfor %}
+    {% if not unassigned_students %}
+    <span style="color:#999;font-size:13px">所有学生已安排座位</span>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- 选择学生模态框 -->
+<div class="select-student-modal" id="selectStudentModal">
+    <div class="modal-content">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0"><i class="fas fa-user-plus"></i> 选择学生入座</h6>
+            <button type="button" class="btn-close" onclick="closeSelectModal()"></button>
+        </div>
+        <div id="studentList">
+            {% for s in unassigned_students %}
+            <div class="student-option" onclick="assignStudent({{ s.id }}, '{{ s.name }}')">
+                {{ s.name }}
+            </div>
+            {% endfor %}
+            {% if not unassigned_students %}
+            <div style="color:#999;font-size:13px;padding:12px;">所有学生已安排座位</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let dragData = null;
+let targetSeatId = null;
+
+// 座位拖拽 - 已占座位
+function onDragStart(e, seatId, studentName) {
+    const cell = e.currentTarget;
+    if (cell.classList.contains('empty')) return;
+    dragData = { type: 'seat', seatId: seatId, studentName: studentName };
+    e.dataTransfer.setData('text/plain', 'seat:' + seatId);
+    e.dataTransfer.effectAllowed = 'move';
+    cell.classList.add('dragging');
+}
+
+// 未安排学生拖拽
+function onUnassignedDragStart(e, studentId, studentName) {
+    dragData = { type: 'unassigned', studentId: studentId, studentName: studentName };
+    e.dataTransfer.setData('text/plain', 'unassigned:' + studentId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.classList.add('dragging');
+}
+
+function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function onDrop(e, targetSeat) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    // 清除所有 dragging 状态
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+
+    if (!dragData) return;
+
+    if (dragData.type === 'seat') {
+        // 拖动已占座位到另一个座位
+        const srcSeat = dragData.seatId;
+        if (srcSeat == targetSeat) return;
+        swapSeats(srcSeat, targetSeat);
+    } else if (dragData.type === 'unassigned') {
+        // 拖动未安排学生到空座位
+        const cell = e.currentTarget;
+        if (!cell.classList.contains('empty')) {
+            // 如果目标座位有学生，先交换
+            if (cell.querySelector('.seat-student')) {
+                alert('目标座位已有学生，请拖动到空座位');
+                return;
+            }
+        }
+        assignStudentToSeat(dragData.studentId, targetSeat);
+    }
+    dragData = null;
+}
+
+// 点击空座位弹出选择学生
+function onSeatClick(e, seatId) {
+    const cell = e.currentTarget;
+    if (!cell.classList.contains('empty')) return;
+    targetSeatId = seatId;
+    showSelectModal();
+}
+
+function showSelectModal() {
+    document.getElementById('selectStudentModal').classList.add('show');
+}
+
+function closeSelectModal() {
+    document.getElementById('selectStudentModal').classList.remove('show');
+    targetSeatId = null;
+}
+
+// 从模态框选择学生
+function assignStudent(studentId, studentName) {
+    if (!targetSeatId) return;
+    assignStudentToSeat(studentId, targetSeatId);
+    closeSelectModal();
+}
+
+function assignStudentToSeat(studentId, seatId) {
+    const formData = new FormData();
+    formData.append('seat_id', seatId);
+    formData.append('student_id', studentId);
+
+    fetch('/seat/assign', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('安排失败: ' + (data.error || '未知错误'));
+        }
+    })
+    .catch(err => alert('请求失败: ' + err));
+}
+
+function swapSeats(seatId1, seatId2) {
+    fetch('/seat/swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seat_id_1: seatId1, seat_id_2: seatId2 })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('交换失败: ' + (data.error || '未知错误'));
+        }
+    })
+    .catch(err => alert('请求失败: ' + err));
+}
+</script>
+{% endblock %}

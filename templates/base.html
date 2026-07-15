@@ -57,11 +57,29 @@
                 </li>
                 <li class="nav-item"><a class="nav-link {% if '/attendance' in request.path and '/weekly' not in request.path and '/stats' not in request.path %}active{% endif %}" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/attendance/weekly' in request.path %}active{% endif %}" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/grades' in request.path %}active{% endif %}" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/training' in request.path %}active{% endif %}" href="/training"><i class="fas fa-tools"></i> 实训管理</a></li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#gradeSub"><i class="fas fa-chart-bar"></i> 成绩管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                    <div class="collapse" id="gradeSub">
+                        <ul class="nav flex-column ms-3">
+                            <li class="nav-item"><a class="nav-link {% if '/grades' in request.path and '/teaching' not in request.path %}active{% endif %}" href="/grades" style="font-size:13px;padding:6px 16px"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+                            <li class="nav-item"><a class="nav-link {% if '/teaching' in request.path %}active{% endif %}" href="/teaching" style="font-size:13px;padding:6px 16px"><i class="fas fa-chalkboard-teacher"></i> 任课管理</a></li>
+                        </ul>
+                    </div>
+                </li>
+                <li class="nav-item"><a class="nav-link {% if '/seat' in request.path %}active{% endif %}" href="/seat"><i class="fas fa-chair"></i> 💺 座位管理</a></li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#trainingSub"><i class="fas fa-tools"></i> 实训管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                    <div class="collapse {% if '/training' in request.path and '/groups' not in request.path %}show{% endif %}" id="trainingSub">
+                        <ul class="nav flex-column ms-3">
+                            <li class="nav-item"><a class="nav-link {% if '/training' in request.path and '/groups' not in request.path %}active{% endif %}" href="/training" style="font-size:13px;padding:6px 16px"><i class="fas fa-tasks"></i> 实训记录</a></li>
+                            <li class="nav-item"><a class="nav-link {% if '/training/groups' in request.path %}active{% endif %}" href="/training/groups" style="font-size:13px;padding:6px 16px"><i class="fas fa-layer-group"></i> 分组管理</a></li>
+                        </ul>
+                    </div>
+                </li>
                 <li class="nav-item"><a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
                 <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
                 <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/data' in request.path %}active{% endif %}" href="/data"><i class="fas fa-database"></i> ⚙️ 数据管理</a></li>
                 <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
             </ul>
             <!-- 学期管理折叠菜单 -->
@@ -184,10 +202,13 @@
             <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
             <li class="nav-item"><a class="nav-link" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
             <li class="nav-item"><a class="nav-link" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
-            <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tools"></i> 实训管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/seat"><i class="fas fa-chair"></i> 💺 座位管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tools"></i> 实训记录</a></li>
+            <li class="nav-item"><a class="nav-link" href="/training/groups"><i class="fas fa-layer-group"></i> 分组管理</a></li>
             <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
             <li class="nav-item"><hr></li>
             <li class="nav-item"><a class="nav-link" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
+            <li class="nav-item"><a class="nav-link" href="/data"><i class="fas fa-database"></i> ⚙️ 数据管理</a></li>
         </ul>
     </div>
 </div>

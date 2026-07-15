@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if subject %}
+<!-- ── 学生列表视图 ── -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="page-title mb-0">
+        <a href="{{ url_for('teaching') }}" class="text-decoration-none me-2" style="color:#1890ff;">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <i class="fas fa-chalkboard-teacher"></i> {{ subject.name }}
+        <small class="text-muted ms-2">{{ subject.teacher }}</small>
+    </h5>
+    <div>
+        <button class="btn btn-sm btn-outline-primary me-2" onclick="showImportModal()">
+            <i class="fas fa-file-import"></i> 导入学生
+        </button>
+    </div>
+</div>
+
+<!-- 学生列表 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-users"></i> 学生列表（共 {{ students|length }} 人）</span>
+    </div>
+    <div class="card-body p-0">
+        {% if students %}
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:60px">#</th>
+                    <th>姓名</th>
+                    <th style="width:120px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ s.name }}</td>
+                    <td>
+                        <form method="post" action="{{ url_for('teaching_student_delete', course_id=subject.id, id=s.id) }}"
+                              style="display:inline" onsubmit="return confirm('确定要删除学生「{{ s.name }}」吗？')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="fas fa-user-plus fa-3x mb-3 d-block"></i>
+            <p>该科目暂无学生，请点击「导入学生」添加</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 导入学生模态框 -->
+<div class="modal fade" id="importModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('teaching_import', course_id=subject.id) }}" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="fas fa-file-import"></i> 导入学生 - {{ subject.name }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-3" id="importTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#textImport" type="button" role="tab">
+                                <i class="fas fa-keyboard"></i> 文本输入
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="excel-tab" data-bs-toggle="tab" data-bs-target="#excelImport" type="button" role="tab">
+                                <i class="fas fa-file-excel"></i> Excel导入
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="textImport" role="tabpanel">
+                            <div class="mb-2">
+                                <label class="form-label">学生姓名（每行一个姓名）</label>
+                                <textarea name="names" class="form-control" rows="8" placeholder="张三&#10;李四&#10;王五&#10;赵六"></textarea>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="excelImport" role="tabpanel">
+                            <div class="mb-2">
+                                <label class="form-label">上传Excel文件（第一列为学生姓名）</label>
+                                <input type="file" name="file" class="form-control" accept=".xls,.xlsx">
+                                <small class="text-muted">支持 .xls 和 .xlsx 格式，取第一列数据作为学生姓名</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-upload"></i> 导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showImportModal() {
+    var m = new bootstrap.Modal(document.getElementById('importModal'));
+    m.show();
+}
+</script>
+
+{% else %}
+<!-- ── 科目列表视图（主页面） ── -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="page-title mb-0"><i class="fas fa-chalkboard-teacher"></i> 任课管理</h5>
+    <button class="btn btn-sm btn-primary" onclick="showAddCourseModal()">
+        <i class="fas fa-plus"></i> 添加科目
+    </button>
+</div>
+
+{% if subject_data %}
+<div class="row">
+    {% for item in subject_data %}
+    <div class="col-md-4 col-lg-3 mb-3">
+        <a href="{{ url_for('teaching_students', course_id=item.subject.id) }}" class="text-decoration-none">
+            <div class="card h-100 stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="mb-1" style="color:#1a1a1a;font-weight:600;">{{ item.subject.name }}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-user-tie"></i> {{ item.subject.teacher or '未设置教师' }}
+                            </small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">{{ item.student_count }}人</span>
+                    </div>
+                    <div class="mt-2 d-flex gap-1">
+                        <form method="post" action="{{ url_for('teaching_delete_course', id=item.subject.id) }}"
+                              onsubmit="return confirm('确定要删除科目「{{ item.subject.name }}」及其所有关联学生吗？')"
+                              style="display:inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="fas fa-chalkboard-teacher fa-4x mb-3 d-block"></i>
+    <h5>暂无任课科目</h5>
+    <p class="mb-3">请点击右上角「添加科目」开始管理</p>
+</div>
+{% endif %}
+
+<!-- 添加科目模态框 -->
+<div class="modal fade" id="addCourseModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('teaching_add_course') }}">
+                <div class="modal-header">
+                    <h6 class="modal-title"><i class="fas fa-plus"></i> 添加任课科目</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">科目名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" placeholder="如：语文、数学" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">任课教师</label>
+                        <input type="text" name="teacher" class="form-control" placeholder="输入教师姓名">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save"></i> 添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddCourseModal() {
+    var m = new bootstrap.Modal(document.getElementById('addCourseModal'));
+    m.show();
+}
+</script>
+
+{% endif %}
+{% endblock %}

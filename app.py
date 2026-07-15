@@ -10,11 +10,16 @@ import csv
 import re
 import json
 import random
+import sys
 from datetime import datetime, date, timedelta
-
 from flask import (Flask, render_template, request, redirect, url_for,
                    flash, send_file, jsonify, session, Response)
 from flask_sqlalchemy import SQLAlchemy
+
+# fnOS: 将 py_packages 加入 Python 路径（install_callback 安装到此目录）
+_fn_pkg = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'py_packages')
+if os.path.exists(_fn_pkg):
+    sys.path.insert(0, _fn_pkg)
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from cryptography.fernet import Fernet
@@ -967,6 +972,9 @@ def semester_delete(id):
     CourseStudent.query.filter_by(semester_id=id).delete()
     Subject.query.filter_by(semester_id=id).delete()
     TrainingProject.query.filter_by(semester_id=id).delete()
+    TrainingGroup.query.filter_by(semester_id=id).delete()
+    SeatAssignment.query.filter_by(semester_id=id).delete()
+    Seat.query.filter_by(semester_id=id).delete()
     Schedule.query.filter_by(semester_id=id).delete()
     db.session.delete(sem)
     db.session.commit()

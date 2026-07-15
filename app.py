@@ -12,14 +12,16 @@ import json
 import random
 import sys
 from datetime import datetime, date, timedelta
-from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, send_file, jsonify, session, Response)
-from flask_sqlalchemy import SQLAlchemy
 
 # fnOS: 将 py_packages 加入 Python 路径（install_callback 安装到此目录）
 _fn_pkg = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'py_packages')
 if os.path.exists(_fn_pkg):
     sys.path.insert(0, _fn_pkg)
+
+from flask import (Flask, render_template, request, redirect, url_for,
+                   flash, send_file, jsonify, session, Response)
+from flask_sqlalchemy import SQLAlchemy
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from cryptography.fernet import Fernet

@@ -43,18 +43,6 @@ MASTER_DB_URI = 'sqlite:///master.db'
 MASTER_DB_PATH = os.path.join(BASE_DIR, 'instance', 'master.db')
 USER_DB_DIR = os.path.join(BASE_DIR, 'instance', 'users')
 
-def switch_db(database_uri):
-    """切换Flask-SQLAlchemy到指定的数据库URI（关闭旧连接，重新创建引擎）"""
-    pass  # 占位符，实际实现在 db 初始化后
-
-def switch_to_user_db(user_id):
-    """切换到指定用户的独立业务数据库，如不存在则自动创建表"""
-    pass  # 占位符，实际实现在 db 初始化后
-
-def is_on_master_db():
-    """判断当前是否连接的是主数据库"""
-    pass  # 占位符，实际实现在 db 初始化后
-
 # gzip 压缩（跳过文件下载）
 @app.after_request
 def gzip_response(response):
@@ -837,7 +825,8 @@ def register():
                      end_date=date(2026, 1, 15), is_current=True)
         db.session.add(s)
         db.session.commit()
-        flash('注册成功，请登录')
+        session['semester_id'] = s.id
+        flash(f'注册成功，请登录')
         return redirect(url_for('login'))
     return render_template('register.html')
 

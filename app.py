@@ -17,6 +17,9 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from cryptography.fernet import Fernet
+from base64 import urlsafe_b64encode
+import hashlib
 
 # ── App配置 ──
 app = Flask(__name__)
@@ -29,10 +32,28 @@ if trim_pkgvar:
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///class_manager.db'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///master.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 365 * 24 * 3600  # 静态文件缓存1年
+
+# ── 多用户独立数据库 ──
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+MASTER_DB_URI = 'sqlite:///master.db'
+MASTER_DB_PATH = os.path.join(BASE_DIR, 'instance', 'master.db')
+USER_DB_DIR = os.path.join(BASE_DIR, 'instance', 'users')
+
+def switch_db(database_uri):
+    """切换Flask-SQLAlchemy到指定的数据库URI（关闭旧连接，重新创建引擎）"""
+    pass  # 占位符，实际实现在 db 初始化后
+
+def switch_to_user_db(user_id):
+    """切换到指定用户的独立业务数据库，如不存在则自动创建表"""
+    pass  # 占位符，实际实现在 db 初始化后
+
+def is_on_master_db():
+    """判断当前是否连接的是主数据库"""
+    pass  # 占位符，实际实现在 db 初始化后
 
 # gzip 压缩（跳过文件下载）
 @app.after_request
@@ -71,7 +92,6 @@ def add_date(d, days):
 app.jinja_env.globals['now'] = lambda: datetime.now()
 app.jinja_env.filters['popcount'] = popcount
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -94,6 +114,14 @@ def check_login():
     if request.endpoint and request.endpoint not in PUBLIC_ROUTES and 'user_id' not in session:
         flash('请先登录')
         return redirect(url_for('login'))
+    # 每次请求开始时，确保使用正确的数据库
+    if request.endpoint and 'user_id' in session and request.endpoint not in PUBLIC_ROUTES:
+        # 已登录用户 → 切换到用户自己的业务数据库
+        switch_to_user_db(session['user_id'])
+    elif request.endpoint and request.endpoint in PUBLIC_ROUTES:
+        # 公开页面 → 确保连接主数据库
+        if not is_on_master_db():
+            switch_db(MASTER_DB_URI)
 
 
 def get_current_semester_id():
@@ -157,6 +185,109 @@ TRUANCY_WARN_HOURS = 80  # 旷课预警阈值
 
 db = SQLAlchemy(app)
 
+# ── 多用户独立数据库函数（实际实现） ──
+def switch_db(database_uri):
+    """切换Flask-SQLAlchemy到指定的数据库URI（关闭旧连接，重新创建引擎）"""
+    db.session.remove()
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
+    # 重新初始化引擎
+    from sqlalchemy import create_engine
+    abs_uri = _resolve_db_uri(database_uri)
+    new_engine = create_engine(abs_uri)
+    try:
+        ext = app.extensions['sqlalchemy']
+        for ref in list(ext._app_engines.data.keys()):
+            if ref() is app:
+                old = ext._app_engines.data[ref][None]
+                old.dispose()
+                ext._app_engines.data[ref][None] = new_engine
+                break
+    except:
+        pass
+    # 应用所有迁移
+    _run_db_migrations()
+    db.create_all()
+
+
+def _resolve_db_uri(uri):
+    """将相对路径的sqlite URI转为绝对路径"""
+    if uri == MASTER_DB_URI:
+        return f'sqlite:///{MASTER_DB_PATH}'
+    if uri.startswith('sqlite:///') and not uri.startswith('sqlite:////'):
+        rel = uri[10:]
+        path = os.path.join(BASE_DIR, 'instance', rel)
+        return f'sqlite:///{path}'
+    return uri
+
+
+def _get_db_path():
+    """获取当前用户的数据库文件路径"""
+    try:
+        uid = session.get('user_id')
+        if uid:
+            return os.path.join(USER_DB_DIR, f'u{uid}.db')
+    except:
+        pass
+    return MASTER_DB_PATH
+
+
+def _run_db_migrations():
+    """对新创建的数据库执行ALTER TABLE迁移"""
+    db_path = _get_db_path()
+    if not os.path.exists(db_path):
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        # student表迁移
+        for col, typ in [('dormitory','VARCHAR(32)'),('special_family','VARCHAR(64)'),
+                         ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
+                         ('special_physical_note','TEXT'),('remark','TEXT')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
+            except: pass
+        for col, typ in [('status','VARCHAR(16)')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
+            except: pass
+        for col, typ in [('withdrawn_reason','TEXT')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
+            except: pass
+        try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
+        except: pass
+        conn.commit()
+        conn.close()
+    except:
+        pass
+
+
+def get_master_conn():
+    """获取主数据库连接（raw sqlite3，不依赖Flask-SQLAlchemy引擎切换）"""
+    os.makedirs(os.path.join(BASE_DIR, 'instance'), exist_ok=True)
+    conn = sqlite3.connect(MASTER_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    # 确保master_user表存在
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS master_user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        db_name TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.commit()
+    return conn
+
+def switch_to_user_db(user_id):
+    """切换到指定用户的独立业务数据库，如不存在则自动创建表"""
+    user_db_dir = os.path.join(BASE_DIR, 'instance', 'users')
+    os.makedirs(user_db_dir, exist_ok=True)
+    db_path = os.path.join(user_db_dir, f'u{user_id}.db')
+    switch_db(f'sqlite:///{db_path}')
+
+def is_on_master_db():
+    """判断当前是否连接的是主数据库"""
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    return MASTER_DB_URI in uri or MASTER_DB_PATH in uri
+
 # ── 常数 ──
 DAY_NAMES = ['周一', '周二', '周三', '周四', '周五']
 SCORE_TYPES = ['课堂表现', '作业质量', '课堂笔记', '考试成绩']
@@ -198,11 +329,13 @@ def get_subjects():
     return [s.name for s in q.order_by(Subject.id).all()]
 
 
-class User(db.Model):
-    __tablename__ = 'user'
+class MasterUser(db.Model):
+    """主数据库用户模型 — 仅存于 master.db，只保存登录凭据"""
+    __tablename__ = 'master_user'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(32), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    db_name = db.Column(db.String(64), default='')  # 对应的用户数据库文件名
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, pw):
@@ -475,9 +608,29 @@ class SeatAssignment(db.Model):
     student = db.relationship('Student', backref=db.backref('seat_assignments', lazy='dynamic'))
 
 
-# 创建所有表
+# 创建所有表（初始化为主数据库 - master.db）
 with app.app_context():
-    db.create_all()
+    # 仅初始化 master.db 的 master_user 表
+    import sqlite3
+    master_db_dir = os.path.join(BASE_DIR, 'instance')
+    os.makedirs(master_db_dir, exist_ok=True)
+    master_db_path = os.path.join(master_db_dir, 'master.db')
+    master_conn = sqlite3.connect(master_db_path)
+    master_c = master_conn.cursor()
+    master_c.execute('''CREATE TABLE IF NOT EXISTS master_user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username VARCHAR(32) UNIQUE NOT NULL,
+        password_hash VARCHAR(256) NOT NULL,
+        db_name VARCHAR(64) DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    master_conn.commit()
+    master_conn.close()
+    # 设置当前数据库连接为master.db
+    db.session.remove()
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///master.db'
+    if db.engine:
+        db.engine.dispose()
 
 
 # ══════════════════════════════════════════════
@@ -642,10 +795,15 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        user = User.query.filter_by(username=username).first()
+        # 切换到主数据库验证用户身份
+        if not is_on_master_db():
+            switch_db(MASTER_DB_URI)
+        user = MasterUser.query.filter_by(username=username).first()
         if user and user.check_password(password):
             session['user_id'] = user.id
             session['username'] = user.username
+            # 登录成功后切换到用户自己的业务数据库
+            switch_to_user_db(user.id)
             flash(f'欢迎回来，{user.username}')
             return redirect(url_for('index'))
         flash('用户名或密码错误')
@@ -660,12 +818,24 @@ def register():
         if not username or not password:
             flash('请填写所有字段')
             return render_template('register.html')
-        if User.query.filter_by(username=username).first():
+        # 切换到主数据库检查是否已存在
+        if not is_on_master_db():
+            switch_db(MASTER_DB_URI)
+        if MasterUser.query.filter_by(username=username).first():
             flash('用户名已存在')
             return render_template('register.html')
-        user = User(username=username)
+        # 在主数据库创建用户
+        user = MasterUser(username=username)
         user.set_password(password)
         db.session.add(user)
+        db.session.commit()
+        # 为新用户创建独立的业务数据库并初始化
+        switch_to_user_db(user.id)
+        # 创建默认学期
+        from datetime import date
+        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025, 9, 1),
+                     end_date=date(2026, 1, 15), is_current=True)
+        db.session.add(s)
         db.session.commit()
         flash('注册成功，请登录')
         return redirect(url_for('login'))
@@ -3582,19 +3752,28 @@ def export_schedule():
 
 
 # ══════════════════════════════════════════════
-# 数据管理（全量导出+恢复）
+# 数据管理（全量导出+恢复+加密备份）
 # ══════════════════════════════════════════════
 
 BACKUP_DIR = os.path.join(BASE_DIR, 'static', 'backups')
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
+# 当前数据库 schema 版本号（每修改表结构时递增）
+SCHEMA_VERSION = '1.0.36'
+
 
 def _get_db_path():
-    """获取当前数据库文件的绝对路径"""
+    """获取当前用户的数据库文件路径"""
+    try:
+        uid = session.get('user_id')
+        if uid:
+            return os.path.join(USER_DB_DIR, f'u{uid}.db')
+    except:
+        pass
     trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
     if trim_pkgvar:
-        return os.path.join(trim_pkgvar, 'class_manager.db')
-    return os.path.join(BASE_DIR, 'instance', 'class_manager.db')
+        return os.path.join(trim_pkgvar, 'master.db')
+    return MASTER_DB_PATH
 
 
 def _get_db_size():
@@ -3608,6 +3787,100 @@ def _get_db_size():
             return f'{size:.1f} {unit}'
         size /= 1024
     return f'{size:.1f} GB'
+
+
+# ── 加密备份辅助函数 ──
+
+def _get_user_key(user_id):
+    """从用户的密码哈希派生 Fernet 密钥"""
+    user = MasterUser.query.get(user_id)
+    if not user:
+        return None
+    # 用 password_hash 的 SHA-256 作为密钥材料，base64 编码后作为 Fernet 密钥
+    key = urlsafe_b64encode(hashlib.sha256(user.password_hash.encode()).digest())
+    return key
+
+
+def _encrypt_backup(data: bytes, user_id: int) -> bytes:
+    """加密备份数据，返回 CMB1 格式的字节流"""
+    key = _get_user_key(user_id)
+    f = Fernet(key)
+    # 头部格式: CMB1|user_id|timestamp|schema_version
+    header = f'CMB1|{user_id}|{datetime.now().isoformat()}|{SCHEMA_VERSION}\n'.encode()
+    encrypted = f.encrypt(data)
+    return header + encrypted
+
+
+def _decrypt_backup(data: bytes, user_id: int) -> bytes:
+    """解密 CMB1 备份数据，验证用户ID是否匹配"""
+    header_end = data.index(b'\n')
+    header = data[:header_end].decode()
+    parts = header.split('|')
+    if parts[0] != 'CMB1':
+        raise ValueError('不支持的备份格式')
+    file_user_id = int(parts[1])
+    # file_timestamp = parts[2]
+    file_schema_version = parts[3] if len(parts) >= 4 else ''
+    if file_user_id != user_id:
+        raise ValueError('此备份不属于当前用户')
+    encrypted = data[header_end + 1:]
+    key = _get_user_key(user_id)
+    f = Fernet(key)
+    return f.decrypt(encrypted), file_schema_version
+
+
+def _parse_cmb_header(data: bytes):
+    """解析 CMB 文件头部，返回 dict 或 None"""
+    try:
+        header_end = data.index(b'\n')
+        header = data[:header_end].decode()
+        parts = header.split('|')
+        return {
+            'magic': parts[0],
+            'user_id': int(parts[1]),
+            'timestamp': parts[2],
+            'schema_version': parts[3] if len(parts) >= 4 else '',
+        }
+    except (ValueError, IndexError, UnicodeDecodeError):
+        return None
+
+
+def _migrate_db_schema(db_path: str, from_version: str = ''):
+    """前向兼容：对旧版本的备份数据库执行 schema 迁移（ALTER TABLE 增加缺失列）"""
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        # 获取已存在的列
+        existing = {row[1] for row in c.execute('PRAGMA table_info(student)').fetchall()}
+        # 需要迁移的列
+        cols_to_add = [
+            ('dormitory', 'VARCHAR(32)', ''),
+            ('special_family', 'VARCHAR(64)', ''),
+            ('special_family_note', 'TEXT', ''),
+            ('special_physical', 'VARCHAR(8)', ''),
+            ('special_physical_note', 'TEXT', ''),
+            ('remark', 'TEXT', ''),
+            ('status', 'VARCHAR(16)', 'active'),
+            ('withdrawn_reason', 'TEXT', ''),
+        ]
+        for col, typ, default in cols_to_add:
+            if col not in existing:
+                try:
+                    c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "{default}"')
+                except:
+                    pass
+        # subject 表
+        try:
+            existing_subj = {row[1] for row in c.execute('PRAGMA table_info(subject)').fetchall()}
+            if 'class_name' not in existing_subj:
+                c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
+        except:
+            pass
+        conn.commit()
+        conn.close()
+    except:
+        pass
 
 
 @app.route('/data')
@@ -3628,26 +3901,50 @@ def data_management():
         'subject_count': Subject.query.count(),
     }
 
-    # 列出历史备份
+    current_user_id = session.get('user_id')
     backups = []
     if os.path.exists(BACKUP_DIR):
         for fname in sorted(os.listdir(BACKUP_DIR), reverse=True):
             fpath = os.path.join(BACKUP_DIR, fname)
-            if os.path.isfile(fpath) and fname.endswith('.db'):
-                mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
-                size = os.path.getsize(fpath)
-                size_str = ''
-                for unit in ['B', 'KB', 'MB', 'GB']:
-                    if size < 1024:
-                        size_str = f'{size:.1f} {unit}'
-                        break
-                    size /= 1024
-                backups.append({
-                    'name': fname,
-                    'size': size_str,
-                    'mtime': mtime.strftime('%Y-%m-%d %H:%M:%S'),
-                    'path': f'backups/{fname}',
-                })
+            if not os.path.isfile(fpath):
+                continue
+            mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
+            size = os.path.getsize(fpath)
+            size_str = ''
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size < 1024:
+                    size_str = f'{size:.1f} {unit}'
+                    break
+                size /= 1024
+
+            backup_item = {
+                'name': fname,
+                'size': size_str,
+                'mtime': mtime.strftime('%Y-%m-%d %H:%M:%S'),
+                'version': '-',
+                'user_id': '-',
+            }
+
+            # .cmb 文件：解析头部获取版本号和用户信息
+            if fname.endswith('.cmb'):
+                try:
+                    with open(fpath, 'rb') as f:
+                        head = _parse_cmb_header(f.read(512))
+                    if head:
+                        backup_item['version'] = head['schema_version']
+                        backup_item['user_id'] = head['user_id']
+                except:
+                    pass
+            # .db 文件：传统格式
+            elif fname.endswith('.db'):
+                backup_item['version'] = '旧版'
+                backup_item['user_id'] = '—'
+
+            # 只显示当前用户的备份（或传统 .db 文件）
+            if fname.endswith('.cmb') and backup_item['user_id'] != current_user_id:
+                continue
+
+            backups.append(backup_item)
 
     return render_template('data.html', stats=stats, backups=backups)
 
@@ -3655,7 +3952,7 @@ def data_management():
 @app.route('/data/export')
 @login_required
 def data_export():
-    """全量导出 - 下载数据库文件"""
+    """全量导出 - 下载原始数据库文件"""
     db_path = _get_db_path()
     if not os.path.exists(db_path):
         flash('数据库文件不存在')
@@ -3672,20 +3969,37 @@ def data_export():
 @app.route('/data/export-backup', methods=['POST'])
 @login_required
 def data_export_backup():
-    """生成带时间戳的备份文件到 static/backups/"""
+    """生成加密的 CMB 格式备份文件到 static/backups/"""
     db_path = _get_db_path()
     if not os.path.exists(db_path):
         flash('数据库文件不存在')
         return redirect(url_for('data_management'))
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f'class_manager_backup_{timestamp}.db'
-    backup_path = os.path.join(BACKUP_DIR, backup_name)
+    user_id = session.get('user_id')
 
     try:
         import shutil
-        shutil.copy2(db_path, backup_path)
-        flash(f'备份已创建：{backup_name}')
+
+        # 先复制一份临时 .db 文件
+        tmp_path = os.path.join(BACKUP_DIR, f'_tmp_{user_id}.db')
+        shutil.copy2(db_path, tmp_path)
+
+        # 读取数据库内容
+        with open(tmp_path, 'rb') as f:
+            db_data = f.read()
+        os.remove(tmp_path)
+
+        # 加密
+        encrypted_data = _encrypt_backup(db_data, user_id)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_name = f'backup_{timestamp}_u{user_id}.cmb'
+        backup_path = os.path.join(BACKUP_DIR, backup_name)
+
+        with open(backup_path, 'wb') as f:
+            f.write(encrypted_data)
+
+        flash(f'加密备份已创建：{backup_name}（Schema 版本: {SCHEMA_VERSION}）')
     except Exception as e:
         flash(f'备份失败：{e}')
 
@@ -3695,40 +4009,77 @@ def data_export_backup():
 @app.route('/data/upload', methods=['POST'])
 @login_required
 def data_upload():
-    """上传备份文件恢复数据"""
+    """上传 .cmb 加密备份或 .db 文件恢复数据"""
     file = request.files.get('backup_file')
+    password_hash = request.form.get('password_hash', '').strip()
+
     if not file:
         flash('请选择要上传的备份文件')
         return redirect(url_for('data_management'))
 
-    if not file.filename.endswith('.db'):
-        flash('请上传 .db 格式的备份文件')
-        return redirect(url_for('data_management'))
-
+    user_id = session.get('user_id')
     db_path = _get_db_path()
 
     try:
-        # 先自动创建当前数据库的备份
+        # 自动备份当前数据库
         if os.path.exists(db_path):
             import shutil
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            auto_backup_name = f'auto_backup_before_restore_{timestamp}.db'
-            auto_backup_path = os.path.join(BACKUP_DIR, auto_backup_name)
+            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}.db')
             shutil.copy2(db_path, auto_backup_path)
 
-        # 关闭所有数据库连接
-        db.session.remove()
-        db.engine.dispose()
+        file_bytes = file.read()
 
-        # 用上传的.db文件替换现有数据库
-        file.save(db_path)
+        if file.filename.endswith('.cmb'):
+            # 加密 CMB 格式 — 需要密码
+            if not password_hash:
+                flash('恢复加密备份需要输入当前登录密码')
+                return redirect(url_for('data_management'))
 
-        # 重新初始化数据库连接
-        from flask_sqlalchemy import SQLAlchemy
+            # 用输入的密码哈希解密（先验证用户身份 — 切换到主数据库查询）
+            old_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            switch_db(MASTER_DB_URI)
+            user = MasterUser.query.get(user_id)
+            if not user or not user.check_password(password_hash):
+                flash('密码验证失败，无法解密备份')
+                if old_uri != MASTER_DB_URI:
+                    switch_db(old_uri)
+                return redirect(url_for('data_management'))
+            if old_uri != MASTER_DB_URI:
+                switch_db(old_uri)
 
-        flash('数据已恢复！请重启应用以使更改生效。')
+            # 解密
+            decrypted_data, schema_version = _decrypt_backup(file_bytes, user_id)
+
+            # 关闭连接
+            db.session.remove()
+            db.engine.dispose()
+
+            # 写入数据库文件
+            with open(db_path, 'wb') as f:
+                f.write(decrypted_data)
+
+            # 如果备份来自旧版本，执行 schema 迁移
+            if schema_version and schema_version != SCHEMA_VERSION:
+                _migrate_db_schema(db_path, schema_version)
+                flash(f'数据已恢复！（Schema 从 {schema_version} 迁移至 {SCHEMA_VERSION}）')
+            else:
+                flash('加密备份已恢复！')
+        elif file.filename.endswith('.db'):
+            # 传统 .db 格式 — 直接恢复
+            db.session.remove()
+            db.engine.dispose()
+            with open(db_path, 'wb') as f:
+                f.write(file_bytes)
+            flash('数据已恢复！（传统 .db 格式）')
+        else:
+            flash('请上传 .cmb 或 .db 格式的文件')
+            return redirect(url_for('data_management'))
+
+    except ValueError as e:
+        flash(f'恢复失败：{e}')
     except Exception as e:
-        flash(f'数据恢复失败：{e}')
+        flash(f'恢复失败：{e}')
 
     return redirect(url_for('data_management'))
 
@@ -3736,18 +4087,36 @@ def data_upload():
 @app.route('/data/backups')
 @login_required
 def data_backups():
-    """列出所有历史备份文件（JSON）"""
+    """列出当前用户的所有备份文件（JSON）"""
+    user_id = session.get('user_id')
     backups = []
     if os.path.exists(BACKUP_DIR):
         for fname in sorted(os.listdir(BACKUP_DIR), reverse=True):
             fpath = os.path.join(BACKUP_DIR, fname)
-            if os.path.isfile(fpath) and fname.endswith('.db'):
-                mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
-                size = os.path.getsize(fpath)
+            if not os.path.isfile(fpath):
+                continue
+            mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
+            size = os.path.getsize(fpath)
+            # .cmb 文件：验证用户归属
+            if fname.endswith('.cmb'):
+                try:
+                    with open(fpath, 'rb') as f:
+                        head = _parse_cmb_header(f.read(512))
+                    if head and head['user_id'] == user_id:
+                        backups.append({
+                            'name': fname,
+                            'size': size,
+                            'mtime': mtime.isoformat(),
+                            'version': head['schema_version'],
+                        })
+                except:
+                    pass
+            elif fname.endswith('.db'):
                 backups.append({
                     'name': fname,
                     'size': size,
                     'mtime': mtime.isoformat(),
+                    'version': '旧版',
                 })
     return jsonify(backups)
 
@@ -3787,53 +4156,283 @@ def data_backup_delete(filename):
     return redirect(url_for('data_management'))
 
 
+@app.route('/data/restore/<filename>', methods=['POST'])
+@login_required
+def data_restore_from_backup(filename):
+    """从服务器上的已有 .cmb 备份恢复数据"""
+    safe_name = os.path.basename(filename)
+    password = request.form.get('password', '').strip()
+
+    if not safe_name.endswith('.cmb'):
+        flash('仅支持从 .cmb 加密备份恢复')
+        return redirect(url_for('data_management'))
+
+    backup_path = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.exists(backup_path):
+        flash('备份文件不存在')
+        return redirect(url_for('data_management'))
+
+    user_id = session.get('user_id')
+    db_path = _get_db_path()
+
+    try:
+        # 验证密码
+        user = MasterUser.query.get(user_id)
+        if not user or not user.check_password(password):
+            flash('密码错误，无法解密备份')
+            return redirect(url_for('data_management'))
+
+        # 读取并解密备份
+        with open(backup_path, 'rb') as f:
+            file_bytes = f.read()
+        decrypted_data, schema_version = _decrypt_backup(file_bytes, user_id)
+
+        # 自动备份当前数据库
+        if os.path.exists(db_path):
+            import shutil
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}.db')
+            shutil.copy2(db_path, auto_backup_path)
+
+        # 关闭连接并替换数据库
+        db.session.remove()
+        db.engine.dispose()
+        with open(db_path, 'wb') as f:
+            f.write(decrypted_data)
+
+        # 前向兼容：schema 迁移
+        if schema_version and schema_version != SCHEMA_VERSION:
+            _migrate_db_schema(db_path, schema_version)
+            flash(f'数据已从「{safe_name}」恢复！（Schema 从 {schema_version} 迁移至 {SCHEMA_VERSION}）')
+        else:
+            flash(f'数据已从「{safe_name}」恢复！')
+
+    except ValueError as e:
+        flash(f'恢复失败：{e}')
+    except Exception as e:
+        flash(f'恢复失败：{e}')
+
+    return redirect(url_for('data_management'))
+
+
+# ── 旧数据库迁移辅助函数 ──
+def _run_alter_migrations(db_file):
+    """对指定的数据库文件执行ALTER TABLE迁移（新增列）"""
+    if not os.path.exists(db_file):
+        return
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_file)
+        c = conn.cursor()
+        for col, typ in [('dormitory','VARCHAR(32)'),('special_family','VARCHAR(64)'),
+                         ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
+                         ('special_physical_note','TEXT'),('remark','TEXT')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
+            except: pass
+        for col, typ in [('status','VARCHAR(16)')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
+            except: pass
+        for col, typ in [('withdrawn_reason','TEXT')]:
+            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
+            except: pass
+        try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
+        except: pass
+        conn.commit(); conn.close()
+    except:
+        pass
+
+
+def _do_migration(old_db_path):
+    """从旧 class_manager.db 迁移数据到新的多用户数据库结构"""
+    import sqlite3
+
+    try:
+        old_conn = sqlite3.connect(old_db_path)
+        old_c = old_conn.cursor()
+    except Exception as e:
+        print(f'❌ 无法打开旧数据库: {e}')
+        return
+
+    # 检查旧数据库是否有 user 表
+    old_c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user'")
+    if not old_c.fetchone():
+        print('⚠️ 旧数据库没有 user 表，跳过用户迁移')
+        old_conn.close()
+        return
+
+    # 读取旧用户
+    old_c.execute('SELECT id, username, password_hash FROM "user" ORDER BY id')
+    old_users = old_c.fetchall()
+    migrated_user_ids = set()
+
+    for uid, uname, pw_hash in old_users:
+        # 在master.db中创建MasterUser
+        if not MasterUser.query.filter_by(username=uname).first():
+            mu = MasterUser(username=uname, password_hash=pw_hash if pw_hash else '')
+            if not mu.password_hash:
+                mu.set_password('123456')
+            db.session.add(mu)
+            db.session.commit()
+        else:
+            mu = MasterUser.query.filter_by(username=uname).first()
+
+        migrated_user_ids.add(mu.id)
+
+    print(f'📋 迁移了 {len(old_users)} 个用户到主数据库')
+
+    if not migrated_user_ids:
+        old_conn.close()
+        return
+
+    # 第一个用户（通常是admin，id最小的）接收所有旧业务数据
+    admin_id = sorted(migrated_user_ids)[0]
+    old_tables = []
+    old_c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    old_tables = [r[0] for r in old_c.fetchall() if r[0] not in ('user', 'sqlite_sequence', 'master_user')]
+
+    if not old_tables:
+        old_conn.close()
+        print('⚠️ 旧数据库没有业务表，跳过数据迁移')
+        # 重命名旧数据库以防重复迁移
+        _rename_old_db(old_db_path)
+        return
+
+    # 切换到admin的业务数据库
+    switch_to_user_db(admin_id)
+
+    # 先检查新db中是否有数据，避免重复迁移
+    for tbl in old_tables:
+        try:
+            old_c.execute(f'SELECT COUNT(*) FROM "{tbl}"')
+            old_count = old_c.fetchone()[0]
+        except:
+            old_count = 0
+
+        new_cursor = db.session.execute(f'SELECT COUNT(*) FROM "{tbl}"') if old_count > 0 else None
+        new_count = 0
+        if new_cursor:
+            try:
+                new_count = new_cursor.fetchone()[0]
+            except:
+                pass
+
+        if old_count > 0 and new_count == 0:
+            # 读取所有数据
+            table_info = []
+            try:
+                old_c.execute(f'PRAGMA table_info("{tbl}")')
+                table_info = old_c.fetchall()
+            except:
+                continue
+
+            col_names = [col[1] for col in table_info if col[1]]
+            if not col_names:
+                continue
+
+            # 读取旧数据
+            try:
+                old_c.execute(f'SELECT * FROM "{tbl}"')
+                rows = old_c.fetchall()
+            except:
+                continue
+
+            # 逐行插入
+            placeholders = ','.join(['?' for _ in col_names])
+            for row in rows:
+                try:
+                    db.session.execute(
+                        f'INSERT INTO "{tbl}" ({",".join(col_names)}) VALUES ({placeholders})',
+                        row
+                    )
+                except Exception as insert_err:
+                    pass  # 跳过冲突行
+
+            print(f'  📄 迁移 {tbl}: {len(rows)} 条')
+
+    db.session.commit()
+    old_conn.close()
+
+    # 执行ALTER TABLE迁移
+    user_db_path = os.path.join(BASE_DIR, 'instance', 'users', f'u{admin_id}.db')
+    _run_alter_migrations(user_db_path)
+
+    # 重命名旧数据库以防重复迁移
+    _rename_old_db(old_db_path)
+
+    # 切回主数据库
+    switch_db(MASTER_DB_URI)
+
+
+def _rename_old_db(old_db_path):
+    """重命名旧数据库文件，标记为已迁移"""
+    try:
+        import shutil
+        if os.path.exists(old_db_path):
+            backup_name = old_db_path + '.migrated'
+            if not os.path.exists(backup_name):
+                shutil.move(old_db_path, backup_name)
+                print(f'📦 旧数据库已备份为: {backup_name}')
+            else:
+                os.remove(old_db_path)
+    except:
+        pass
+
+
 # ══════════════════════════════════════════════
 # 启动
 # ══════════════════════════════════════════════
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
-        # 创建默认管理员（首次运行）
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin')
+        # ── 第1步：初始化主数据库（master.db） ──
+        switch_db(MASTER_DB_URI)
+        print('✅ 主数据库已就绪')
+
+        # ── 第2步：检查旧数据库，执行数据迁移 ──
+        old_db_path = os.path.join(BASE_DIR, 'instance', 'class_manager.db')
+        if os.path.exists(old_db_path):
+            print('📦 检测到旧数据库，正在迁移数据...')
+            _do_migration(old_db_path)
+            print('✅ 旧数据库数据已迁移完成')
+
+        # ── 第3步：创建默认管理员（首次运行） ──
+        if not MasterUser.query.filter_by(username='admin').first():
+            admin = MasterUser(username='admin')
             admin.set_password('admin123')
             db.session.add(admin)
             db.session.commit()
             print('已创建默认管理员: admin / admin123')
-        # 数据库迁移：新增列
-        import sqlite3
-        try:
-            trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
-            if trim_pkgvar:
-                db_file = os.path.join(trim_pkgvar, 'class_manager.db')
-            else:
-                db_file = 'instance/class_manager.db'
-            conn = sqlite3.connect(db_file)
-            c = conn.cursor()
-            for col, typ in [('dormitory','VARCHAR(32)'),('special_family','VARCHAR(64)'),
-                             ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
-                             ('special_physical_note','TEXT'),('remark','TEXT')]:
-                try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-                except: pass
-            for col, typ in [('status','VARCHAR(16)')]:
-                try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
-                except: pass
-            for col, typ in [('withdrawn_reason','TEXT')]:
-                try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-                except: pass
-            # 迁移 subject 表
-            try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
-            except: pass
-            conn.commit(); conn.close()
-        except: pass
-        # 创建默认学期（仅当没有学期且明确需要时）
-        if Semester.query.count() == 0:
+            # 为admin创建业务数据库并初始化
+            switch_to_user_db(admin.id)
             from datetime import date
-            s3 = Semester(name='2025-2026学年度第1学期', start_date=date(2025,9,1), end_date=date(2026,1,15), is_current=True)
-            db.session.add(s3)
-            db.session.commit()
-            print('已创建默认学期')
+            if Semester.query.count() == 0:
+                s = Semester(name='2025-2026学年度第1学期', start_date=date(2025,9,1),
+                             end_date=date(2026,1,15), is_current=True)
+                db.session.add(s)
+                db.session.commit()
+                print('已创建默认学期')
+            # 切回主数据库（启动后 before_request 会处理）
+            switch_db(MASTER_DB_URI)
+        else:
+            # 确保所有已有用户都有业务数据库
+            for mu in MasterUser.query.all():
+                user_db_path = os.path.join(BASE_DIR, 'instance', 'users', f'u{mu.id}.db')
+                if not os.path.exists(user_db_path):
+                    switch_to_user_db(mu.id)
+                    # 执行ALTER TABLE迁移
+                    _run_alter_migrations(user_db_path)
+                    from datetime import date
+                    if Semester.query.count() == 0:
+                        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025,9,1),
+                                     end_date=date(2026,1,15), is_current=True)
+                        db.session.add(s)
+                        db.session.commit()
+                        print(f'已为用户 {mu.username} 创建业务数据库和默认学期')
+                else:
+                    # 对已有数据库执行ALTER TABLE迁移
+                    _run_alter_migrations(user_db_path)
+            switch_db(MASTER_DB_URI)
+
     print(f'✅ 班级管理系统启动成功！')
     print(f'🌐 请访问: http://localhost:5800')
     print(f'🔑 管理员账号: admin / admin123\n')

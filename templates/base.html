@@ -33,43 +33,67 @@
         .badge-personal { background-color: #faad14 !important; color: #fff !important; }
         .badge-truant { background-color: #ff4d4f !important; color: #fff !important; }
 
-        /* ── 侧边栏（浅色主题） ── */
+        /* ── 侧边栏主题变量（默认：极光蓝） ── */
         .sidebar {
-            background: #ffffff;
-            border-right: 1px solid #e8e8e8;
+            /* CSS 变量 -- 切换主题时只需改这几项 */
+            --sd-bg: #eef2f7;
+            --sd-border: #dce1e8;
+            --sd-text: #333;
+            --sd-nav-text: #555;
+            --sd-nav-icon: #777;
+            --sd-hover-text: #1890ff;
+            --sd-hover-bg: #dce8f5;
+            --sd-active-text: #1890ff;
+            --sd-active-bg: #d0e0f0;
+            --sd-active-border: #1890ff;
+            --sd-logo-color: #1a1a1a;
+            --sd-logo-icon: #1890ff;
+            --sd-footer-border: #dce1e8;
+            --sd-footer-text: #999;
+            --sd-sem-hover: #dce8f5;
+
+            background: var(--sd-bg);
+            border-right: 1px solid var(--sd-border);
             position: fixed; top: 0; left: 0;
             width: 220px; height: 100vh;
-            color: #333; z-index: 100;
+            color: var(--sd-text); z-index: 100;
             overflow-y: auto;
-            transition: all 0.3s;
+            transition: background 0.3s, border-color 0.3s;
         }
+        /* ── 主题色预设 ── */
+        .theme-skyblue  { --sd-bg: #e3f2fd; --sd-border: #bbdefb; --sd-hover-bg: #bbdefb; --sd-active-bg: #90caf9; --sd-sem-hover: #bbdefb; }
+        .theme-mint     { --sd-bg: #e8f5e9; --sd-border: #c8e6c9; --sd-hover-bg: #c8e6c9; --sd-active-bg: #a5d6a7; --sd-sem-hover: #c8e6c9; }
+        .theme-cream    { --sd-bg: #fff8e1; --sd-border: #ffecb3; --sd-hover-bg: #ffecb3; --sd-active-bg: #ffe082; --sd-sem-hover: #ffecb3; }
+        .theme-lavender { --sd-bg: #f3e5f5; --sd-border: #e1bee7; --sd-hover-bg: #e1bee7; --sd-active-bg: #ce93d8; --sd-sem-hover: #e1bee7; }
+        .theme-gray     { --sd-bg: #eceff1; --sd-border: #cfd8dc; --sd-hover-bg: #cfd8dc; --sd-active-bg: #b0bec5; --sd-sem-hover: #cfd8dc; }
+
         .sidebar .logo {
             padding: 20px; font-size: 18px; font-weight: bold;
-            border-bottom: 1px solid #e8e8e8;
-            color: #1a1a1a;
+            border-bottom: 1px solid var(--sd-border);
+            color: var(--sd-logo-color);
         }
-        .sidebar .logo i { color: #1890ff; }
+        .sidebar .logo i { color: var(--sd-logo-icon); }
         .sidebar .nav-link {
-            color: #555;
+            color: var(--sd-nav-text);
             padding: 12px 20px;
             border-radius: 0;
             transition: all 0.2s;
             border-left: 3px solid transparent;
         }
         .sidebar .nav-link:hover {
-            color: #1890ff;
-            background: #e6f7ff;
-            border-left-color: #1890ff;
+            color: var(--sd-hover-text);
+            background: var(--sd-hover-bg);
+            border-left-color: var(--sd-active-border);
         }
         .sidebar .nav-link.active {
-            color: #1890ff;
-            background: #e6f7ff;
-            border-left-color: #1890ff;
+            color: var(--sd-active-text);
+            background: var(--sd-active-bg);
+            border-left-color: var(--sd-active-border);
             font-weight: 600;
         }
-        .sidebar .nav-link i { width: 20px; margin-right: 8px; color: #666; }
+        .sidebar .nav-link i { width: 20px; margin-right: 8px; color: var(--sd-nav-icon); }
         .sidebar .nav-link:hover i,
-        .sidebar .nav-link.active i { color: #1890ff; }
+        .sidebar .nav-link.active i { color: var(--sd-active-text); }
         .sidebar .sub-nav .nav-link {
             padding: 8px 16px 8px 40px;
             font-size: 13px;
@@ -78,17 +102,17 @@
         .sidebar .sub-nav .nav-link:hover,
         .sidebar .sub-nav .nav-link.active {
             border-left: none;
-            background: #f0f9ff;
+            background: var(--sd-hover-bg);
         }
-        .sidebar hr { border-color: #e8e8e8; margin: 8px 16px; }
+        .sidebar hr { border-color: var(--sd-border); margin: 8px 16px; }
 
         /* 学期管理区域 */
-        .sidebar .sem-section a { color: #555; }
-        .sidebar .sem-section a:hover { color: #1890ff; }
+        .sidebar .sem-section a { color: var(--sd-nav-text); }
+        .sidebar .sem-section a:hover { color: var(--sd-hover-text); }
         .sidebar .sem-btn {
             font-size: 12px;
             background: transparent;
-            color: #555;
+            color: var(--sd-nav-text);
             border: none;
             border-radius: 4px;
             padding: 3px 8px;
@@ -97,22 +121,48 @@
         }
         .sidebar .sem-btn:hover,
         .sidebar .sem-btn.active {
-            background: #e6f7ff;
-            color: #1890ff;
+            background: var(--sd-sem-hover);
+            color: var(--sd-hover-text);
         }
-        .sidebar .sem-btn i { color: #1890ff; }
         .sidebar .sidebar-footer {
-            border-top: 1px solid #e8e8e8;
+            border-top: 1px solid var(--sd-footer-border);
             padding: 12px 20px;
         }
-        .sidebar .sidebar-footer .text-muted { color: #999 !important; font-size: 11px; }
+        .sidebar .sidebar-footer .text-muted { color: var(--sd-footer-text) !important; font-size: 11px; }
         .sidebar .sidebar-footer .logout-link {
-            color: #999;
+            color: var(--sd-footer-text);
             font-size: 12px;
             text-decoration: none;
         }
         .sidebar .sidebar-footer .logout-link:hover {
             color: #ff4d4f;
+        }
+        /* ── 主题选择器 ── */
+        .theme-picker {
+            padding: 10px 16px;
+            border-top: 1px solid var(--sd-border);
+        }
+        .theme-picker .picker-label {
+            font-size: 11px;
+            color: var(--sd-footer-text);
+            margin-bottom: 6px;
+        }
+        .theme-picker .theme-dot {
+            display: inline-block;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .theme-picker .theme-dot:hover {
+            transform: scale(1.15);
+        }
+        .theme-picker .theme-dot.active {
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px #1890ff33;
         }
 
         /* ── 主内容区 ── */
@@ -340,6 +390,19 @@
             </div>
         </div>
 
+        <!-- 主题选择器 -->
+        <div class="theme-picker">
+            <div class="picker-label"><i class="fas fa-palette"></i> 主题颜色</div>
+            <div>
+                <span class="theme-dot active" data-theme="default"  style="background:#eef2f7" title="极光蓝（默认）"></span>
+                <span class="theme-dot" data-theme="skyblue"  style="background:#e3f2fd" title="天空蓝"></span>
+                <span class="theme-dot" data-theme="mint"     style="background:#e8f5e9" title="薄荷绿"></span>
+                <span class="theme-dot" data-theme="cream"    style="background:#fff8e1" title="暖米色"></span>
+                <span class="theme-dot" data-theme="lavender" style="background:#f3e5f5" title="淡紫色"></span>
+                <span class="theme-dot" data-theme="gray"     style="background:#eceff1" title="静谧灰"></span>
+            </div>
+        </div>
+
         <div class="sidebar-footer">
             <div class="text-muted">{{ session.get('username','') }}</div>
             <a href="/logout" class="logout-link"><i class="fas fa-sign-out-alt"></i> 退出</a>
@@ -527,6 +590,38 @@ function confirmDelSemester(id) {
     if (!confirm('再次确认：此操作不可撤销！')) return;
     fetch('/semester/' + id + '/delete', {method:'POST'}).then(function(r){location.reload();});
 }
+/* ── 主题切换 ── */
+(function() {
+    var sidebar = document.querySelector('.sidebar');
+    var dots = document.querySelectorAll('.theme-dot');
+    function setTheme(name) {
+        // 移除所有主题 class
+        var classes = sidebar.className.split(' ').filter(function(c) {
+            return c.indexOf('theme-') !== 0;
+        });
+        if (name && name !== 'default') {
+            classes.push('theme-' + name);
+        }
+        sidebar.className = classes.join(' ');
+        // 更新选中状态
+        dots.forEach(function(d) { d.classList.remove('active'); });
+        var active = document.querySelector('.theme-dot[data-theme="' + name + '"]');
+        if (active) active.classList.add('active');
+        // 保存到 localStorage
+        try { localStorage.setItem('sidebar_theme', name); } catch(e) {}
+    }
+    dots.forEach(function(dot) {
+        dot.addEventListener('click', function() {
+            setTheme(this.dataset.theme);
+        });
+    });
+    // 恢复上次选择的主题
+    try {
+        var saved = localStorage.getItem('sidebar_theme');
+        if (saved) setTheme(saved);
+    } catch(e) {}
+})();
+</script>
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

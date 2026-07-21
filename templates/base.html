@@ -219,8 +219,8 @@
             }
             .btn-group-responsive .btn { flex: 1 1 auto; min-width: 0; }
 
-            /* 移动端顶部间距 */
-            .main-content-wrap { padding-top: 52px; }
+            /* 移动端顶部间距 + 清除桌面侧边栏占位 */
+            .main-content-wrap { padding-top: 52px; margin-left: 0 !important; }
 
             /* 统计卡片移动端 2 列布局 */
             .row.g-3 .col-6 .stat-card { padding: 10px; }
@@ -298,6 +298,21 @@
         .offcanvas .sem-btn-mobile.active {
             background: #e6f7ff;
             color: #1890ff;
+        }
+        .offcanvas .theme-dot-mb {
+            display: inline-block;
+            width: 26px; height: 26px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .offcanvas .theme-dot-mb:hover { transform: scale(1.15); }
+        .offcanvas .theme-dot-mb.active {
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px #1890ff33;
         }
 
         /* ── 表格横向滚动提示 ── */
@@ -566,6 +581,19 @@
             </div>
         </div>
 
+        <!-- 移动端主题选择器 -->
+        <div class="px-3 py-2 border-top">
+            <div style="font-size:11px;color:#999;margin-bottom:6px"><i class="fas fa-palette"></i> 主题颜色</div>
+            <div>
+                <span class="theme-dot-mb active" data-theme="default"  style="background:#eef2f7" title="极光蓝（默认）"></span>
+                <span class="theme-dot-mb" data-theme="skyblue"  style="background:#e3f2fd" title="天空蓝"></span>
+                <span class="theme-dot-mb" data-theme="mint"     style="background:#e8f5e9" title="薄荷绿"></span>
+                <span class="theme-dot-mb" data-theme="cream"    style="background:#fff8e1" title="暖米色"></span>
+                <span class="theme-dot-mb" data-theme="lavender" style="background:#f3e5f5" title="淡紫色"></span>
+                <span class="theme-dot-mb" data-theme="gray"     style="background:#eceff1" title="静谧灰"></span>
+            </div>
+        </div>
+
         <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center">
             <small class="text-muted">{{ session.get('username','') }}</small>
             <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="fas fa-sign-out-alt"></i> 退出</a>
@@ -593,7 +621,7 @@ function confirmDelSemester(id) {
 /* ── 主题切换 ── */
 (function() {
     var sidebar = document.querySelector('.sidebar');
-    var dots = document.querySelectorAll('.theme-dot');
+    var allDots = document.querySelectorAll('.theme-dot, .theme-dot-mb');
     function setTheme(name) {
         // 移除所有主题 class
         var classes = sidebar.className.split(' ').filter(function(c) {
@@ -603,14 +631,15 @@ function confirmDelSemester(id) {
             classes.push('theme-' + name);
         }
         sidebar.className = classes.join(' ');
-        // 更新选中状态
-        dots.forEach(function(d) { d.classList.remove('active'); });
-        var active = document.querySelector('.theme-dot[data-theme="' + name + '"]');
-        if (active) active.classList.add('active');
+        // 更新所有色块的选中状态（桌面+移动端）
+        allDots.forEach(function(d) { d.classList.remove('active'); });
+        document.querySelectorAll('.theme-dot[data-theme="' + name + '"], .theme-dot-mb[data-theme="' + name + '"]').forEach(function(d) {
+            d.classList.add('active');
+        });
         // 保存到 localStorage
         try { localStorage.setItem('sidebar_theme', name); } catch(e) {}
     }
-    dots.forEach(function(dot) {
+    allDots.forEach(function(dot) {
         dot.addEventListener('click', function() {
             setTheme(this.dataset.theme);
         });

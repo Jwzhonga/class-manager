@@ -25,7 +25,7 @@
     <div class="card-header">学生考勤汇总</div>
     <div class="card-body p-0">
         <div class="table-responsive" style="max-height:400px;overflow-y:auto">
-            <table class="table table-sm mb-0 table-sortable">
+            <table class="table table-sm mb-0 table-sortable table-card-mode">
                 <thead>
                     <tr>
                         <th>姓名</th>
@@ -40,13 +40,13 @@
                 <tbody>
                     {% for s in students %}
                     <tr class="{% if s.truant_hours >= warn_hours %}table-danger{% endif %}">
-                        <td><strong>{{ s.student.name }}</strong></td>
-                        <td>{{ s.sick_hours }}</td>
-                        <td>{{ s.personal_hours }}</td>
-                        <td>{{ s.truant_hours }}</td>
-                        <td>{{ s.late_count }}</td>
-                        <td><strong>{{ s.total_absent }}</strong></td>
-                        <td>{% if s.truant_hours >= warn_hours %}<span class="badge bg-danger">预警</span>{% endif %}</td>
+                        <td data-label="姓名"><strong>{{ s.student.name }}</strong></td>
+                        <td data-label="病假">{{ s.sick_hours }}</td>
+                        <td data-label="事假">{{ s.personal_hours }}</td>
+                        <td data-label="旷课">{{ s.truant_hours }}</td>
+                        <td data-label="迟到">{{ s.late_count }}</td>
+                        <td data-label="总缺勤"><strong>{{ s.total_absent }}</strong></td>
+                        <td data-label="预警">{% if s.truant_hours >= warn_hours %}<span class="badge bg-danger">预警</span>{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

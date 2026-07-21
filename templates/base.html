@@ -8,213 +8,505 @@
     <link href="/static/bootstrap.min.css" rel="stylesheet">
     <link href="/static/fontawesome.min.css" rel="stylesheet">
     <style>
-        body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
-        .sidebar { background: #001529; position: fixed; top: 0; left: 0; width: 220px; height: 100vh; color: #fff; z-index: 100; overflow-y: auto; }
-        .sidebar .nav-link { color: #ffffffa6; padding: 12px 20px; border-radius: 0; transition: all 0.2s; }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: #1890ff; }
-        .sidebar .nav-link i { width: 20px; margin-right: 8px; }
-        .sidebar .logo { padding: 20px; font-size: 18px; font-weight: bold; border-bottom: 1px solid #ffffff1a; }
-        .main-content { height: 100vh; display: flex; flex-direction: column; }
-        .main-content-header { flex-shrink: 0; background: #f0f2f5; position: sticky; top: 0; z-index: 10; padding: 20px 20px 0 20px; }
-        .main-content-body { flex: 1; overflow-y: auto; padding: 0 20px 20px 20px; }
+        /* ── 全局 ── */
+        body {
+            background: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
         .stat-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px #0000000d; transition: transform 0.2s; }
         .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px #0000001a; }
         .stat-card .number { font-size: 28px; font-weight: bold; }
         .stat-card .label { color: #666; font-size: 14px; }
-        .page-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #1a1a1a; position: sticky; top: 0; z-index: 10; background: #f0f2f5; padding: 12px 0 8px; margin: 0 0 12px 0; }
+        .page-title {
+            font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #1a1a1a;
+            position: sticky; top: 0; z-index: 10; background: #f0f2f5; padding: 12px 0 8px; margin: 0 0 12px 0;
+        }
         .card { border-radius: 8px; box-shadow: 0 1px 3px #0000000d; }
         .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; font-weight: 600; }
         .table th { background: #fafafa; font-weight: 600; }
         .alert { margin-bottom: 8px; }
         table img.voucher-thumb { max-width: 80px; max-height: 60px; border-radius: 4px; cursor: pointer; }
-        @media print { .sidebar, .no-print { display: none !important; } .main-content { margin: 0 !important; } }
+        @media print { .sidebar, .no-print, #mobileHeader { display: none !important; } .main-content { margin: 0 !important; } }
         .badge-present { background-color: #52c41a !important; color: #fff !important; }
         .badge-late { background-color: #faad14 !important; color: #fff !important; }
         .badge-sick { background-color: #1890ff !important; color: #fff !important; }
         .badge-personal { background-color: #faad14 !important; color: #fff !important; }
         .badge-truant { background-color: #ff4d4f !important; color: #fff !important; }
+
+        /* ── 侧边栏（浅色主题） ── */
+        .sidebar {
+            background: #ffffff;
+            border-right: 1px solid #e8e8e8;
+            position: fixed; top: 0; left: 0;
+            width: 220px; height: 100vh;
+            color: #333; z-index: 100;
+            overflow-y: auto;
+            transition: all 0.3s;
+        }
+        .sidebar .logo {
+            padding: 20px; font-size: 18px; font-weight: bold;
+            border-bottom: 1px solid #e8e8e8;
+            color: #1a1a1a;
+        }
+        .sidebar .logo i { color: #1890ff; }
+        .sidebar .nav-link {
+            color: #555;
+            padding: 12px 20px;
+            border-radius: 0;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar .nav-link:hover {
+            color: #1890ff;
+            background: #e6f7ff;
+            border-left-color: #1890ff;
+        }
+        .sidebar .nav-link.active {
+            color: #1890ff;
+            background: #e6f7ff;
+            border-left-color: #1890ff;
+            font-weight: 600;
+        }
+        .sidebar .nav-link i { width: 20px; margin-right: 8px; color: #666; }
+        .sidebar .nav-link:hover i,
+        .sidebar .nav-link.active i { color: #1890ff; }
+        .sidebar .sub-nav .nav-link {
+            padding: 8px 16px 8px 40px;
+            font-size: 13px;
+            border-left: none;
+        }
+        .sidebar .sub-nav .nav-link:hover,
+        .sidebar .sub-nav .nav-link.active {
+            border-left: none;
+            background: #f0f9ff;
+        }
+        .sidebar hr { border-color: #e8e8e8; margin: 8px 16px; }
+
+        /* 学期管理区域 */
+        .sidebar .sem-section a { color: #555; }
+        .sidebar .sem-section a:hover { color: #1890ff; }
+        .sidebar .sem-btn {
+            font-size: 12px;
+            background: transparent;
+            color: #555;
+            border: none;
+            border-radius: 4px;
+            padding: 3px 8px;
+            text-align: left;
+            width: 100%;
+        }
+        .sidebar .sem-btn:hover,
+        .sidebar .sem-btn.active {
+            background: #e6f7ff;
+            color: #1890ff;
+        }
+        .sidebar .sem-btn i { color: #1890ff; }
+        .sidebar .sidebar-footer {
+            border-top: 1px solid #e8e8e8;
+            padding: 12px 20px;
+        }
+        .sidebar .sidebar-footer .text-muted { color: #999 !important; font-size: 11px; }
+        .sidebar .sidebar-footer .logout-link {
+            color: #999;
+            font-size: 12px;
+            text-decoration: none;
+        }
+        .sidebar .sidebar-footer .logout-link:hover {
+            color: #ff4d4f;
+        }
+
+        /* ── 主内容区 ── */
+        .main-content-wrap {
+            flex: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-content-header {
+            flex-shrink: 0;
+            background: #f0f2f5;
+            position: sticky; top: 0; z-index: 10;
+            padding: 20px 20px 0 20px;
+        }
+        .main-content-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px 20px 20px;
+        }
+
+        /* ── 移动端适配 ── */
         @media (max-width: 767px) {
-            .main-content { padding: 12px; }
-            .page-title { font-size: 16px; }
-            .stat-card .number { font-size: 22px; }
+            body { overflow-x: hidden; }
+            .main-content-header { padding: 12px 12px 0 12px; }
+            .main-content-body { padding: 0 12px 12px 12px; }
+            .page-title { font-size: 16px; padding: 8px 0 4px; }
             .stat-card { padding: 12px; }
-            .table th, .table td { font-size: 12px; padding: 4px !important; }
+            .stat-card .number { font-size: 22px; }
+
+            /* 表格自动横向滚动 */
+            .table-responsive {
+                border: 0;
+                margin-bottom: 0;
+                -webkit-overflow-scrolling: touch;
+            }
+            .table-responsive table { min-width: 650px; }
+            .table th, .table td { font-size: 12px; padding: 4px !important; white-space: nowrap; }
+
+            /* 隐藏低频列以适配小屏 — 用 data-hide-mobile 标记 */
+            .hide-mobile { display: none !important; }
+
+            /* 卡片在移动端更紧凑 */
+            .card-body { padding: 12px; }
+
+            /* 考勤侧栏堆叠 */
+            .attendance-sidebar { margin-top: 12px; }
+
+            /* 按钮组在移动端换行 */
+            .btn-group-responsive {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .btn-group-responsive .btn { flex: 1 1 auto; min-width: 0; }
+
+            /* 移动端顶部间距 */
+            .main-content-wrap { padding-top: 52px; }
+
+            /* 统计卡片移动端 2 列布局 */
+            .row.g-3 .col-6 .stat-card { padding: 10px; }
+        }
+
+        /* ── 移动端表格卡片模式（特小屏 480px 以下） ── */
+        @media (max-width: 480px) {
+            .table-card-mode thead { display: none; }
+            .table-card-mode tbody tr {
+                display: block;
+                margin-bottom: 8px;
+                border: 1px solid #e8e8e8;
+                border-radius: 6px;
+                padding: 8px;
+                background: #fff;
+            }
+            .table-card-mode tbody td {
+                display: flex;
+                justify-content: space-between;
+                padding: 4px 0 !important;
+                border: none;
+                white-space: normal;
+                font-size: 12px;
+            }
+            .table-card-mode tbody td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: #666;
+                margin-right: 8px;
+                flex-shrink: 0;
+            }
+            .table-card-mode tbody td[data-label="操作"] {
+                justify-content: flex-start;
+                gap: 4px;
+            }
+        }
+
+        /* ── Offcanvas 移动菜单 ── */
+        .offcanvas {
+            background: #ffffff;
+        }
+        .offcanvas .nav-link {
+            color: #333;
+            padding: 10px 16px;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .offcanvas .nav-link:hover,
+        .offcanvas .nav-link.active {
+            color: #1890ff;
+            background: #e6f7ff;
+            border-left-color: #1890ff;
+        }
+        .offcanvas .nav-link i { width: 20px; color: #666; margin-right: 8px; }
+        .offcanvas .sub-nav .nav-link {
+            padding-left: 44px;
+            font-size: 13px;
+            border-left: none;
+        }
+        .offcanvas .sub-nav .nav-link:hover { border-left: none; }
+        .offcanvas hr { margin: 4px 16px; border-color: #e8e8e8; }
+        .offcanvas .sem-btn-mobile {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 6px 16px 6px 44px;
+            font-size: 13px;
+            color: #555;
+            background: none;
+            border: none;
+            border-radius: 0;
+            transition: all 0.2s;
+        }
+        .offcanvas .sem-btn-mobile:hover,
+        .offcanvas .sem-btn-mobile.active {
+            background: #e6f7ff;
+            color: #1890ff;
+        }
+
+        /* ── 表格横向滚动提示 ── */
+        .scroll-hint {
+            display: none;
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            padding: 4px;
+            background: #fafafa;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        @media (max-width: 767px) {
+            .scroll-hint { display: block; }
         }
     </style>
 </head>
 <body>
-<div class="container-fluid">
-<div class="d-flex">
-        <div class="sidebar d-none d-md-block"
-             style="width:220px;flex-shrink:0;background:#001529;position:fixed;top:0;left:0;height:100vh;color:#fff;z-index:100;overflow-y:auto;">
-            <div class="logo"><i class="fas fa-graduation-cap"></i> 班级管理</div>
-            <ul class="nav flex-column">
-                <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/"><i class="fas fa-home"></i> 首页仪表盘</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/students' in request.path %}active{% endif %}" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#vSub"><i class="fas fa-gavel"></i> 违纪管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
-                    <div class="collapse" id="vSub">
-                        <ul class="nav flex-column ms-3">
-                            <li class="nav-item"><a class="nav-link" href="/discipline" style="font-size:13px;padding:6px 16px"><i class="fas fa-file-alt"></i> 处分管理</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/violation" style="font-size:13px;padding:6px 16px"><i class="fas fa-clipboard-list"></i> 违纪记录</a></li>
-                        </ul>
-                    </div>
-                </li>
-                <li class="nav-item"><a class="nav-link {% if '/attendance' in request.path and '/weekly' not in request.path and '/stats' not in request.path %}active{% endif %}" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/attendance/weekly' in request.path %}active{% endif %}" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#gradeSub"><i class="fas fa-chart-bar"></i> 成绩管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
-                    <div class="collapse" id="gradeSub">
-                        <ul class="nav flex-column ms-3">
-                            <li class="nav-item"><a class="nav-link {% if '/grades' in request.path and '/teaching' not in request.path %}active{% endif %}" href="/grades" style="font-size:13px;padding:6px 16px"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
-                            <li class="nav-item"><a class="nav-link {% if '/teaching' in request.path %}active{% endif %}" href="/teaching" style="font-size:13px;padding:6px 16px"><i class="fas fa-chalkboard-teacher"></i> 任课管理</a></li>
-                        </ul>
-                    </div>
-                </li>
-                <li class="nav-item"><a class="nav-link {% if '/seat' in request.path %}active{% endif %}" href="/seat"><i class="fas fa-chair"></i> 💺 座位管理</a></li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#trainingSub"><i class="fas fa-tools"></i> 实训管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
-                    <div class="collapse {% if '/training' in request.path and '/groups' not in request.path %}show{% endif %}" id="trainingSub">
-                        <ul class="nav flex-column ms-3">
-                            <li class="nav-item"><a class="nav-link {% if '/training' in request.path and '/groups' not in request.path %}active{% endif %}" href="/training" style="font-size:13px;padding:6px 16px"><i class="fas fa-tasks"></i> 实训记录</a></li>
-                            <li class="nav-item"><a class="nav-link {% if '/training/groups' in request.path %}active{% endif %}" href="/training/groups" style="font-size:13px;padding:6px 16px"><i class="fas fa-layer-group"></i> 分组管理</a></li>
-                        </ul>
-                    </div>
-                </li>
-                <li class="nav-item"><a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
-                <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
-                <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/data' in request.path %}active{% endif %}" href="/data"><i class="fas fa-database"></i> ⚙️ 数据管理</a></li>
-                <li class="nav-item"><hr style="border-color:#ffffff1a; margin:8px 16px;"></li>
-            </ul>
-            <!-- 学期管理折叠菜单 -->
-            <div class="px-3 py-1">
-                <a class="nav-link d-block" href="#" data-bs-toggle="collapse" data-bs-target="#semSub" style="color:#ffffffa6;padding:4px 0;font-size:13px"><i class="fas fa-calendar-alt"></i> 学期管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:4px"></i></a>
-                <div class="collapse" id="semSub">
-                    {% for s in semesters %}
-                    <div class="d-flex align-items-center gap-1 py-1" style="padding-left:4px">
-                        <form method="post" action="/semester/set" class="flex-grow-1" style="margin:0">
-                            <button type="submit" name="semester_id" value="{{ s.id }}"
-                                class="btn btn-sm w-100 text-start" style="font-size:12px;background:{% if current_semester and s.id == current_semester.id %}#1890ff{% else %}transparent{% endif %};color:#fff;border:none;border-radius:4px;padding:3px 8px">
-                                {{ s.name }}
-                            </button>
-                        </form>
-                        <a href="#" onclick="showRenameSemester({{ s.id }},'{{ s.name }}');return false" style="color:#ffffff99;font-size:11px" title="重命名"><i class="fas fa-edit"></i></a>
-                        {% if semesters|length > 1 %}
-                        <a href="#" onclick="confirmDelSemester({{ s.id }});return false" style="color:#ff6666;font-size:11px" title="删除"><i class="fas fa-times"></i></a>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                    <div class="text-center pt-1">
-                        <a href="#" onclick="showNewSemester();return false" style="color:#ffffff99;font-size:11px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
-                    </div>
+
+<div class="container-fluid p-0">
+<div class="d-flex position-relative">
+
+    <!-- ========== 桌面侧边栏 ========== -->
+    <div class="sidebar d-none d-md-block">
+        <div class="logo"><i class="fas fa-graduation-cap"></i> 班级管理</div>
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/"><i class="fas fa-home"></i> 首页仪表盘</a></li>
+            <li class="nav-item"><a class="nav-link {% if '/students' in request.path %}active{% endif %}" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#vSub"><i class="fas fa-gavel"></i> 违纪管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="vSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/discipline"><i class="fas fa-file-alt"></i> 处分管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/violation"><i class="fas fa-clipboard-list"></i> 违纪记录</a></li>
+                    </ul>
+                </div>
+            </li>
+            <li class="nav-item"><a class="nav-link {% if '/attendance' in request.path and '/weekly' not in request.path and '/stats' not in request.path %}active{% endif %}" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
+            <li class="nav-item"><a class="nav-link {% if '/attendance/weekly' in request.path %}active{% endif %}" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#gradeSub"><i class="fas fa-chart-bar"></i> 成绩管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="gradeSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teaching"><i class="fas fa-chalkboard-teacher"></i> 任课管理</a></li>
+                    </ul>
+                </div>
+            </li>
+            <li class="nav-item"><a class="nav-link {% if '/seat' in request.path %}active{% endif %}" href="/seat"><i class="fas fa-chair"></i> 💺 座位管理</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#trainingSub"><i class="fas fa-tools"></i> 实训管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="trainingSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tasks"></i> 实训记录</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/training/groups"><i class="fas fa-layer-group"></i> 分组管理</a></li>
+                    </ul>
+                </div>
+            </li>
+            <li class="nav-item"><a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
+            <li class="nav-item"><hr></li>
+            <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
+            <li class="nav-item"><a class="nav-link {% if '/data' in request.path %}active{% endif %}" href="/data"><i class="fas fa-database"></i> ⚙️ 数据管理</a></li>
+            <li class="nav-item"><hr></li>
+        </ul>
+
+        <!-- 学期管理 -->
+        <div class="px-3 py-1 sem-section">
+            <a class="nav-link d-block" href="#" data-bs-toggle="collapse" data-bs-target="#semSub" style="color:#555;padding:4px 0;font-size:13px">
+                <i class="fas fa-calendar-alt" style="color:#1890ff;margin-right:8px"></i> 学期管理
+                <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:4px"></i>
+            </a>
+            <div class="collapse" id="semSub">
+                {% for s in semesters %}
+                <div class="d-flex align-items-center gap-1 py-1" style="padding-left:4px">
+                    <form method="post" action="/semester/set" class="flex-grow-1" style="margin:0">
+                        <button type="submit" name="semester_id" value="{{ s.id }}"
+                            class="sem-btn{% if current_semester and s.id == current_semester.id %} active{% endif %}">
+                            {{ s.name }}
+                        </button>
+                    </form>
+                    <a href="#" onclick="showRenameSemester({{ s.id }},'{{ s.name }}');return false" style="color:#999;font-size:11px" title="重命名"><i class="fas fa-edit"></i></a>
+                    {% if semesters|length > 1 %}
+                    <a href="#" onclick="confirmDelSemester({{ s.id }});return false" style="color:#ff6666;font-size:11px" title="删除"><i class="fas fa-times"></i></a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <div class="text-center pt-1">
+                    <a href="#" onclick="showNewSemester();return false" style="color:#1890ff;font-size:11px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
                 </div>
             </div>
-            <div class="px-3 py-1" style="color:#ffffff66;font-size:11px">{{ session.get('username','') }}</div>
-            <a class="nav-link py-1" href="/logout" style="color:#ffffff99;font-size:12px"><i class="fas fa-sign-out-alt"></i> 退出</a>
         </div>
 
-        <div class="main-content-wrap" style="flex:1;margin-left:220px;height:100vh;display:flex;flex-direction:column;">
-            <div class="d-flex justify-content-between align-items-center mb-3 d-md-none">
-                <h5 class="mb-0">班级管理系统</h5>
-                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
-                    <i class="fas fa-bars"></i>
-                </button>
+        <div class="sidebar-footer">
+            <div class="text-muted">{{ session.get('username','') }}</div>
+            <a href="/logout" class="logout-link"><i class="fas fa-sign-out-alt"></i> 退出</a>
+        </div>
+    </div>
+
+    <!-- ========== 移动端顶部栏 ========== -->
+    <div id="mobileHeader" class="d-md-none position-fixed top-0 start-0 end-0" style="z-index:99;background:#fff;border-bottom:1px solid #e8e8e8;padding:10px 16px;">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0" style="font-size:16px;font-weight:600"><i class="fas fa-graduation-cap" style="color:#1890ff"></i> 班级管理</h5>
+            <button class="btn btn-outline-primary btn-sm" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== 主内容区 ========== -->
+    <div class="main-content-wrap" style="margin-left:220px;">
+        <div class="main-content-header">
+            <div class="text-center mb-2" style="font-size:13px;color:#666">
+                <i class="fas fa-calendar-alt"></i> 当前学期：<strong>{{ current_semester.name }}</strong>
             </div>
-            <div class="main-content-header">
-                <div class="text-center mb-2" style="font-size:13px;color:#666">
-                    <i class="fas fa-calendar-alt"></i> 当前学期：<strong>{{ current_semester.name }}</strong>
-                </div>
-                {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                <div class="alert alert-success alert-dismissible fade show">
-                    {% for msg in messages %}{{ msg }}{% endfor %}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-                {% endif %}
-                {% endwith %}
-                </div>
-                <div class="main-content-body">
-                {% block content %}{% endblock %}
-                </div>
-<!-- 新建学期模态框 -->
-<div class="modal fade" id="newSemesterModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-sm">
-        <form class="modal-content" method="post" action="/semester/add">
-            <div class="modal-header"><h6 class="modal-title"><i class="fas fa-plus"></i> 新建学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <div class="mb-2">
-                    <label class="form-label">学年</label>
-                    <div class="d-flex gap-2 align-items-center">
-                        <input type="number" name="start_year" class="form-control form-control-sm" value="2026" required style="width:80px" oninput="document.getElementById('semEndYear').value = this.value && parseInt(this.value)+1 || ''">
-                        <span>—</span>
-                        <input type="number" id="semEndYear" class="form-control form-control-sm" value="2027" readonly style="width:80px;background:#f0f0f0">
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="alert alert-success alert-dismissible fade show">
+                {% for msg in messages %}{{ msg }}{% endfor %}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endif %}
+            {% endwith %}
+            </div>
+            <div class="main-content-body">
+            {% block content %}{% endblock %}
+            </div>
+
+    <!-- 新建学期模态框 -->
+    <div class="modal fade" id="newSemesterModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-sm">
+            <form class="modal-content" method="post" action="/semester/add">
+                <div class="modal-header"><h6 class="modal-title"><i class="fas fa-plus"></i> 新建学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">学年</label>
+                        <div class="d-flex gap-2 align-items-center">
+                            <input type="number" name="start_year" class="form-control form-control-sm" value="2026" required style="width:80px" oninput="document.getElementById('semEndYear').value = this.value && parseInt(this.value)+1 || ''">
+                            <span>—</span>
+                            <input type="number" id="semEndYear" class="form-control form-control-sm" value="2027" readonly style="width:80px;background:#f0f0f0">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">学期</label>
+                        <select name="semester_num" class="form-select form-control-sm">
+                            <option value="1">第1学期（秋季）</option>
+                            <option value="2">第2学期（春季）</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" name="start_date" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" name="end_date" class="form-control form-control-sm" required>
                     </div>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label">学期</label>
-                    <select name="semester_num" class="form-select form-control-sm">
-                        <option value="1">第1学期（秋季）</option>
-                        <option value="2">第2学期（春季）</option>
-                    </select>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary">创建</button>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label">开始日期</label>
-                    <input type="date" name="start_date" class="form-control form-control-sm" required>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">结束日期</label>
-                    <input type="date" name="end_date" class="form-control form-control-sm" required>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="submit" class="btn btn-sm btn-primary">创建</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
-</div>
 
-<!-- 重命名学期模态框 -->
-<div class="modal fade" id="renameSemesterModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <form class="modal-content" method="post" action="" id="renameSemesterForm">
-            <div class="modal-header"><h6 class="modal-title"><i class="fas fa-edit"></i> 重命名学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <div class="mb-2">
-                    <label class="form-label">新名称</label>
-                    <input type="text" name="name" id="renameSemesterInput" class="form-control form-control-sm" required>
+    <!-- 重命名学期模态框 -->
+    <div class="modal fade" id="renameSemesterModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <form class="modal-content" method="post" action="" id="renameSemesterForm">
+                <div class="modal-header"><h6 class="modal-title"><i class="fas fa-edit"></i> 重命名学期</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">新名称</label>
+                        <input type="text" name="name" id="renameSemesterInput" class="form-control form-control-sm" required>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="submit" class="btn btn-sm btn-primary">保存</button>
-            </div>
-        </form>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
         </div>
     </div>
 </div>
 
+<!-- ========== 移动端 Offcanvas 菜单（完整版） ========== -->
 <div class="offcanvas offcanvas-start" id="mobileMenu">
-    <div class="offcanvas-header"><h5>班级管理</h5><button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button></div>
+    <div class="offcanvas-header border-bottom">
+        <h5 style="font-size:16px;font-weight:600"><i class="fas fa-graduation-cap" style="color:#1890ff"></i> 班级管理</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
     <div class="offcanvas-body p-0">
         <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-home"></i> 首页</a></li>
-            <li class="nav-item"><a class="nav-link" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
-            <li class="nav-item"><a class="nav-link" href="#"><i class="fas fa-gavel"></i> 违纪管理</a></li>
+            <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/"><i class="fas fa-home"></i> 首页</a></li>
+            <li class="nav-item"><a class="nav-link {% if '/students' in request.path %}active{% endif %}" href="/students"><i class="fas fa-users"></i> 学生管理</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#m_vSub"><i class="fas fa-gavel"></i> 违纪管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="m_vSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/discipline"><i class="fas fa-file-alt"></i> 处分管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/violation"><i class="fas fa-clipboard-list"></i> 违纪记录</a></li>
+                    </ul>
+                </div>
+            </li>
             <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
             <li class="nav-item"><a class="nav-link" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
-            <li class="nav-item"><a class="nav-link" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#m_gradeSub"><i class="fas fa-chart-bar"></i> 成绩管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="m_gradeSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/grades"><i class="fas fa-chart-bar"></i> 成绩管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teaching"><i class="fas fa-chalkboard-teacher"></i> 任课管理</a></li>
+                    </ul>
+                </div>
+            </li>
             <li class="nav-item"><a class="nav-link" href="/seat"><i class="fas fa-chair"></i> 💺 座位管理</a></li>
-            <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tools"></i> 实训记录</a></li>
-            <li class="nav-item"><a class="nav-link" href="/training/groups"><i class="fas fa-layer-group"></i> 分组管理</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#m_trainingSub"><i class="fas fa-tools"></i> 实训管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav" id="m_trainingSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/training"><i class="fas fa-tasks"></i> 实训记录</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/training/groups"><i class="fas fa-layer-group"></i> 分组管理</a></li>
+                    </ul>
+                </div>
+            </li>
             <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
             <li class="nav-item"><hr></li>
             <li class="nav-item"><a class="nav-link" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
             <li class="nav-item"><a class="nav-link" href="/data"><i class="fas fa-database"></i> ⚙️ 数据管理</a></li>
+            <li class="nav-item"><hr></li>
         </ul>
+
+        <!-- 学期管理 -->
+        <div class="px-3 py-2">
+            <a class="d-block" href="#" data-bs-toggle="collapse" data-bs-target="#m_semSub" style="color:#333;font-size:13px;padding:6px 0;text-decoration:none">
+                <i class="fas fa-calendar-alt" style="color:#1890ff;width:20px"></i> 学期管理
+                <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:4px"></i>
+            </a>
+            <div class="collapse" id="m_semSub">
+                <form method="post" action="/semester/set" id="mobileSemForm">
+                {% for s in semesters %}
+                    <button type="submit" name="semester_id" value="{{ s.id }}"
+                        class="sem-btn-mobile{% if current_semester and s.id == current_semester.id %} active{% endif %}">
+                        {{ s.name }}
+                    </button>
+                {% endfor %}
+                </form>
+                <div class="text-center pt-1">
+                    <a href="#" onclick="showNewSemester();$('#mobileMenu').offcanvas('hide');return false" style="color:#1890ff;font-size:12px;text-decoration:none"><i class="fas fa-plus"></i> 新建学期</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center">
+            <small class="text-muted">{{ session.get('username','') }}</small>
+            <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="fas fa-sign-out-alt"></i> 退出</a>
+        </div>
     </div>
 </div>
 
@@ -238,6 +530,7 @@ function confirmDelSemester(id) {
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    /* ── 可拖动列宽 ── */
     document.querySelectorAll('.table-resizable').forEach(function(table) {
         const tableId = table.id || table.className.replace(/\s+/g, '_');
         const headers = table.querySelectorAll('th');
@@ -270,6 +563,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+
+    /* ── 表格排序 ── */
     document.querySelectorAll('.table-sortable').forEach(function(table) {
         const headers = table.querySelectorAll('th'); const tbody = table.querySelector('tbody');
         if (!tbody) return;

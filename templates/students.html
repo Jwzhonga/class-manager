@@ -258,22 +258,22 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">取消选择</button>
             </div>
             <form method="post" action="/students/batch-delete" id="batchForm">
-            <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
+            <table class="table table-hover mb-0 table-sm table-resizable table-sortable table-card-mode" id="students_table">
                 <thead>
                     <tr>
                         <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
                         <th style="width:55px">姓名</th>
                         <th style="width:35px">性别</th>
-                        <th style="width:130px">身份证号</th>
-                        <th style="width:90px">监护人</th>
-                        <th style="width:60px">关系</th>
-                        <th style="width:95px">电话</th>
+                        <th style="width:130px" class="hide-mobile">身份证号</th>
+                        <th style="width:90px" class="hide-mobile">监护人</th>
+                        <th style="width:60px" class="hide-mobile">关系</th>
+                        <th style="width:95px" class="hide-mobile">电话</th>
                         <th style="width:80px">就读</th>
-                        <th style="width:80px">建档</th>
+                        <th style="width:80px" class="hide-mobile">建档</th>
                         <th style="width:55px" data-no-sort>宿舍</th>
-                        <th style="width:50px">户口</th>
-                        <th style="width:50px">民族</th>
-                        <th style="min-width:90px">住址</th>
+                        <th style="width:50px" class="hide-mobile">户口</th>
+                        <th style="width:50px" class="hide-mobile">民族</th>
+                        <th style="min-width:90px" class="hide-mobile">住址</th>
                         <th style="width:65px" data-no-sort>操作</th>
                     </tr>
                 </thead>
@@ -281,35 +281,35 @@
                     {% for s in students %}
                     <tr>
                         <td><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
-                        <td style="font-size:12px">{{ s.name }}</td>
-                        <td style="font-size:12px">{{ s.gender }}</td>
-                        <td style="font-size:12px">{{ s.id_card }}</td>
-                        <td style="font-size:12px">{{ s.parent_name }}</td>
-                        <td style="font-size:12px">{{ s.parent_relation or '' }}</td>
-                        <td style="font-size:12px">{{ s.parent_phone }}</td>
-                        <td>
+                        <td style="font-size:12px" data-label="姓名">{{ s.name }}</td>
+                        <td style="font-size:12px" data-label="性别">{{ s.gender }}</td>
+                        <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="身份证号">{{ s.id_card }}</td>
+                        <td style="font-size:12px" class="hide-mobile" data-label="监护人">{{ s.parent_name }}</td>
+                        <td style="font-size:12px" class="hide-mobile" data-label="关系">{{ s.parent_relation or '' }}</td>
+                        <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="电话">{{ s.parent_phone }}</td>
+                        <td data-label="就读">
                             <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:12px;padding:1px 22px 1px 4px;width:100%" onchange="toggleDorm(this, {{ s.id }})">
                                 <option value="住校" {% if s.live_mode == '住校' %}selected{% endif %}>住校</option>
                                 <option value="走读" {% if s.live_mode == '走读' %}selected{% endif %}>走读</option>
                             </select>
                         </td>
-                        <td>
+                        <td class="hide-mobile" data-label="建档">
                             <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:12px;padding:1px 22px 1px 4px;width:100%">
                                 <option value="否" {% if not s.poverty_status or s.poverty_status == '否' %}selected{% endif %}>否</option>
                                 <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困</option>
                             </select>
                         </td>
-                        <td id="dorm-{{ s.id }}">
+                        <td id="dorm-{{ s.id }}" data-label="宿舍">
                             {% if s.live_mode == '住校' %}
                             <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:12px;padding:1px 4px;width:100%">
                             {% else %}
                             <span class="text-muted" style="font-size:11px">—</span>
                             {% endif %}
                         </td>
-                        <td style="font-size:12px">{{ s.residence_type or '' }}</td>
-                        <td style="font-size:12px">{{ s.ethnic or '' }}</td>
-                        <td style="white-space:pre-wrap;word-break:break-word;max-width:150px;font-size:12px">{{ s.address }}</td>
-                        <td style="white-space:nowrap">
+                        <td style="font-size:12px" class="hide-mobile" data-label="户口">{{ s.residence_type or '' }}</td>
+                        <td style="font-size:12px" class="hide-mobile" data-label="民族">{{ s.ethnic or '' }}</td>
+                        <td style="white-space:pre-wrap;word-break:break-word;max-width:150px;font-size:12px" class="hide-mobile" data-label="住址">{{ s.address }}</td>
+                        <td style="white-space:nowrap" data-label="操作">
                             <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
                             <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')"><i class="fas fa-trash"></i></a>
                         </td>

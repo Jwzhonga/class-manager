@@ -5,23 +5,23 @@
 <div class="row g-3">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <span>考勤登记</span>
-                <div>
-                    <form method="get" action="/export/attendance" class="d-inline-block me-2">
+                <div class="d-flex flex-wrap align-items-center gap-1">
+                    <form method="get" action="/export/attendance" class="d-inline-block me-1">
                         <input type="hidden" name="format" value="excel">
                         <input type="hidden" name="detail" value="1">
                         <input type="text" name="student" placeholder="学生姓名" class="form-control form-control-sm d-inline-block" style="width:100px">
-                        <input type="date" name="start" class="form-control form-control-sm d-inline-block" style="width:auto">
-                        <input type="date" name="end" class="form-control form-control-sm d-inline-block" style="width:auto">
+                        <input type="date" name="start" class="form-control form-control-sm d-inline-block" style="width:130px">
+                        <input type="date" name="end" class="form-control form-control-sm d-inline-block d-none d-sm-inline-block" style="width:130px">
                         <button type="submit" class="btn btn-sm btn-outline-success">筛选导出</button>
                     </form>
-                    <div class="btn-group btn-group-sm me-2">
+                    <div class="btn-group btn-group-sm me-1">
                         <a href="/export/attendance?format=excel" class="btn btn-outline-success">汇总</a>
                         <a href="/export/attendance?format=excel&detail=1" class="btn btn-outline-success">明细</a>
                     </div>
                     <form method="get" action="/attendance" class="d-inline">
-                        <input type="date" name="date" class="form-control form-control-sm d-inline-block" style="width:auto" value="{{ query_date }}" onchange="this.form.submit()">
+                        <input type="date" name="date" class="form-control form-control-sm d-inline-block" style="width:130px" value="{{ query_date }}" onchange="this.form.submit()">
                     </form>
                 </div>
             </div>
@@ -111,7 +111,7 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-4 attendance-sidebar">
         <div class="card">
             <div class="card-header">已登记 ({{ query_date }})</div>
             <div class="card-body p-0">

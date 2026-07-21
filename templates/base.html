@@ -37,8 +37,8 @@
         .badge-truant { background-color: #ff4d4f !important; color: #fff !important; }
 
         /* ── 侧边栏主题变量（默认：极光蓝） ── */
-        .sidebar {
-            /* CSS 变量 -- 切换主题时只需改这几项 */
+        /* 主题通过 body 类切换，确保移动端/桌面端都生效 */
+        body {
             --sd-bg: #eef2f7;
             --sd-border: #dce1e8;
             --sd-text: #333;
@@ -54,7 +54,14 @@
             --sd-footer-border: #dce1e8;
             --sd-footer-text: #999;
             --sd-sem-hover: #dce8f5;
+        }
+        .theme-skyblue  { --sd-bg: #e3f2fd; --sd-border: #bbdefb; --sd-hover-bg: #bbdefb; --sd-active-bg: #90caf9; --sd-sem-hover: #bbdefb; }
+        .theme-mint     { --sd-bg: #e8f5e9; --sd-border: #c8e6c9; --sd-hover-bg: #c8e6c9; --sd-active-bg: #a5d6a7; --sd-sem-hover: #c8e6c9; }
+        .theme-cream    { --sd-bg: #fff8e1; --sd-border: #ffecb3; --sd-hover-bg: #ffecb3; --sd-active-bg: #ffe082; --sd-sem-hover: #ffecb3; }
+        .theme-lavender { --sd-bg: #f3e5f5; --sd-border: #e1bee7; --sd-hover-bg: #e1bee7; --sd-active-bg: #ce93d8; --sd-sem-hover: #e1bee7; }
+        .theme-gray     { --sd-bg: #eceff1; --sd-border: #cfd8dc; --sd-hover-bg: #cfd8dc; --sd-active-bg: #b0bec5; --sd-sem-hover: #cfd8dc; }
 
+        .sidebar {
             background: var(--sd-bg);
             border-right: 1px solid var(--sd-border);
             position: fixed; top: 0; left: 0;
@@ -63,13 +70,6 @@
             overflow-y: auto;
             transition: background 0.3s, border-color 0.3s;
         }
-        /* ── 主题色预设 ── */
-        .theme-skyblue  { --sd-bg: #e3f2fd; --sd-border: #bbdefb; --sd-hover-bg: #bbdefb; --sd-active-bg: #90caf9; --sd-sem-hover: #bbdefb; }
-        .theme-mint     { --sd-bg: #e8f5e9; --sd-border: #c8e6c9; --sd-hover-bg: #c8e6c9; --sd-active-bg: #a5d6a7; --sd-sem-hover: #c8e6c9; }
-        .theme-cream    { --sd-bg: #fff8e1; --sd-border: #ffecb3; --sd-hover-bg: #ffecb3; --sd-active-bg: #ffe082; --sd-sem-hover: #ffecb3; }
-        .theme-lavender { --sd-bg: #f3e5f5; --sd-border: #e1bee7; --sd-hover-bg: #e1bee7; --sd-active-bg: #ce93d8; --sd-sem-hover: #e1bee7; }
-        .theme-gray     { --sd-bg: #eceff1; --sd-border: #cfd8dc; --sd-hover-bg: #cfd8dc; --sd-active-bg: #b0bec5; --sd-sem-hover: #cfd8dc; }
-
         .sidebar .logo {
             padding: 20px; font-size: 18px; font-weight: bold;
             border-bottom: 1px solid var(--sd-border);
@@ -666,17 +666,14 @@ function confirmDelSemester(id) {
 }
 /* ── 主题切换 ── */
 (function() {
-    var sidebar = document.querySelector('.sidebar');
-    if (!sidebar) return; // 安全保护
     var allDots = document.querySelectorAll('.theme-dot, .theme-dot-mb');
     function setTheme(name) {
-        var classes = sidebar.className.split(' ').filter(function(c) {
-            return c.indexOf('theme-') !== 0;
-        });
+        // 从 body 移除所有主题 class
+        document.body.classList.remove('theme-skyblue', 'theme-mint', 'theme-cream', 'theme-lavender', 'theme-gray');
         if (name && name !== 'default') {
-            classes.push('theme-' + name);
+            document.body.classList.add('theme-' + name);
         }
-        sidebar.className = classes.join(' ');
+        // 更新所有色块的选中状态
         allDots.forEach(function(d) { d.classList.remove('active'); });
         document.querySelectorAll('.theme-dot[data-theme="' + name + '"], .theme-dot-mb[data-theme="' + name + '"]').forEach(function(d) {
             d.classList.add('active');

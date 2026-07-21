@@ -258,10 +258,10 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">取消选择</button>
             </div>
             <form method="post" action="/students/batch-delete" id="batchForm">
-            <table class="table table-hover mb-0 table-sm table-resizable table-sortable table-card-mode" id="students_table">
+            <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
                 <thead>
                     <tr>
-                        <th style="width:30px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                        <th style="width:30px" class="hide-mobile"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
                         <th style="width:55px">姓名</th>
                         <th style="width:35px">性别</th>
                         <th style="width:130px" class="hide-mobile">身份证号</th>
@@ -270,7 +270,7 @@
                         <th style="width:95px" class="hide-mobile">电话</th>
                         <th style="width:80px">就读</th>
                         <th style="width:80px" class="hide-mobile">建档</th>
-                        <th style="width:55px" data-no-sort>宿舍</th>
+                        <th style="width:55px" data-no-sort class="hide-mobile">宿舍</th>
                         <th style="width:50px" class="hide-mobile">户口</th>
                         <th style="width:50px" class="hide-mobile">民族</th>
                         <th style="min-width:90px" class="hide-mobile">住址</th>
@@ -280,7 +280,7 @@
                 <tbody>
                     {% for s in students %}
                     <tr>
-                        <td><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
+                        <td class="hide-mobile"><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
                         <td style="font-size:12px" data-label="姓名">{{ s.name }}</td>
                         <td style="font-size:12px" data-label="性别">{{ s.gender }}</td>
                         <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="身份证号">{{ s.id_card }}</td>
@@ -299,7 +299,7 @@
                                 <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困</option>
                             </select>
                         </td>
-                        <td id="dorm-{{ s.id }}" data-label="宿舍">
+                        <td id="dorm-{{ s.id }}" class="hide-mobile" data-label="宿舍">
                             {% if s.live_mode == '住校' %}
                             <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:12px;padding:1px 4px;width:100%">
                             {% else %}

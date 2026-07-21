@@ -197,30 +197,24 @@
             .page-title { font-size: 15px; padding: 6px 0 3px; margin-bottom: 8px !important; }
 
             /* 卡片全面压缩 */
-            .card { margin-bottom: 8px; }
+            .card { margin-bottom: 6px; }
             .card-body { padding: 8px 10px; }
             .card-header { padding: 6px 10px; font-size: 13px; }
             .card-header .btn-sm { font-size: 11px; padding: 2px 6px; }
             .card-footer { padding: 4px 10px; font-size: 11px; }
+            .card.border-0.shadow-sm { margin-bottom: 6px; }
 
-            /* 统计卡片紧凑 */
-            .stat-card { padding: 8px; margin-bottom: 6px; }
+            /* 统计卡片紧凑 — 只用 padding 不改 row margin，不破坏 Bootstrap 网格 */
+            .stat-card { padding: 8px; }
             .stat-card .number { font-size: 18px; }
             .stat-card .label { font-size: 11px; }
-            .row.g-2 { gap: 4px !important; margin: 0; }
-            .row.g-2 > [class*="col-"] { padding: 2px; }
-            .row.g-3 { gap: 6px !important; margin: 0; }
-            .row.g-3 > [class*="col-"] { padding: 3px; }
+            /* 缩小 Bootstrap 网格 gutter */
+            .row.g-2 { --bs-gutter-x: 0.25rem; --bs-gutter-y: 0.25rem; }
+            .row.g-3 { --bs-gutter-x: 0.35rem; --bs-gutter-y: 0.35rem; }
             .mb-3 { margin-bottom: 6px !important; }
             .mb-4 { margin-bottom: 8px !important; }
-            .gap-2 { gap: 4px !important; }
-            .gap-3 { gap: 6px !important; }
-            .p-2 { padding: 6px !important; }
-            .p-3 { padding: 8px !important; }
-            .py-4 { padding-top: 8px !important; padding-bottom: 8px !important; }
-            .px-3 { padding-left: 8px !important; padding-right: 8px !important; }
 
-            /* 无横向滚动：所有表格改为卡片模式 */
+            /* 无横向滚动 */
             .table-responsive { border: 0; margin-bottom: 0; overflow: visible; }
             .table-responsive table { min-width: 0; }
             .table th, .table td { font-size: 11px; padding: 3px !important; }
@@ -232,8 +226,6 @@
             .attendance-sidebar { margin-top: 8px; }
 
             /* 按钮组紧凑 */
-            .btn-group-responsive { display: flex; flex-wrap: wrap; gap: 3px; }
-            .btn-group-responsive .btn { flex: 1 1 auto; min-width: 0; font-size: 11px; padding: 2px 6px; }
             .btn { font-size: 12px; padding: 3px 8px; }
             .btn-sm { font-size: 11px; padding: 2px 6px; }
 
@@ -243,8 +235,6 @@
             /* form 元素紧凑 */
             .form-control, .form-select { font-size: 12px !important; padding: 2px 6px !important; }
             .form-control-sm { font-size: 11px !important; padding: 1px 4px !important; }
-            .input-group { flex-wrap: nowrap; }
-            .input-group > .form-control { min-width: 0; }
 
             /* 模态框紧凑 */
             .modal-header { padding: 8px 12px; }
@@ -255,7 +245,6 @@
 
             /* alert 紧凑 */
             .alert { padding: 6px 10px; font-size: 12px; margin-bottom: 4px; }
-            .alert .btn-close { font-size: 10px; padding: 4px; }
 
             /* 徽章紧凑 */
             .badge { font-size: 10px; padding: 2px 5px; }
@@ -678,9 +667,9 @@ function confirmDelSemester(id) {
 /* ── 主题切换 ── */
 (function() {
     var sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return; // 安全保护
     var allDots = document.querySelectorAll('.theme-dot, .theme-dot-mb');
     function setTheme(name) {
-        // 移除所有主题 class
         var classes = sidebar.className.split(' ').filter(function(c) {
             return c.indexOf('theme-') !== 0;
         });
@@ -688,26 +677,28 @@ function confirmDelSemester(id) {
             classes.push('theme-' + name);
         }
         sidebar.className = classes.join(' ');
-        // 更新所有色块的选中状态（桌面+移动端）
         allDots.forEach(function(d) { d.classList.remove('active'); });
         document.querySelectorAll('.theme-dot[data-theme="' + name + '"], .theme-dot-mb[data-theme="' + name + '"]').forEach(function(d) {
             d.classList.add('active');
         });
-        // 保存到 localStorage
         try { localStorage.setItem('sidebar_theme', name); } catch(e) {}
     }
     allDots.forEach(function(dot) {
         dot.addEventListener('click', function() {
             setTheme(this.dataset.theme);
+            // 移动端：选择后自动关闭 offcanvas 菜单
+            var mobileMenu = document.getElementById('mobileMenu');
+            if (mobileMenu && mobileMenu.classList.contains('show')) {
+                var bsOffcanvas = bootstrap.Offcanvas.getInstance(mobileMenu);
+                if (bsOffcanvas) bsOffcanvas.hide();
+            }
         });
     });
-    // 恢复上次选择的主题
     try {
         var saved = localStorage.getItem('sidebar_theme');
         if (saved) setTheme(saved);
     } catch(e) {}
 })();
-</script>
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

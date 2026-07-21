@@ -125,7 +125,7 @@ function showImportModal() {
 {% if subject_data %}
 <div class="row">
     {% for item in subject_data %}
-    <div class="col-md-4 col-lg-3 mb-3">
+    <div class="col-6 col-md-4 col-lg-3 mb-3">
         <a href="{{ url_for('teaching_students', course_id=item.subject.id) }}" class="text-decoration-none">
             <div class="card h-100 stat-card">
                 <div class="card-body">

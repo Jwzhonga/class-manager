@@ -36,7 +36,7 @@
                         <small class="text-muted">支持 jpg/png/gif/webp</small>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-sm table-bordered table-resizable table-sortable" id="attendance_table">
+                        <table class="table table-sm table-bordered table-resizable table-sortable table-card-mode" id="attendance_table">
                             <thead>
                                 <tr>
                                     <th style="width:40px">#</th>
@@ -51,9 +51,9 @@
                                 {% for s in students %}
                                 {% set rec = existing_map.get(s.id) %}
                                 <tr>
-                                    <td>{{ loop.index }}</td>
-                                    <td><strong>{{ s.name }}</strong></td>
-                                    <td>
+                                    <td data-label="#"> {{ loop.index }}</td>
+                                    <td data-label="姓名"><strong>{{ s.name }}</strong></td>
+                                    <td data-label="状态">
                                         <select name="status_{{ s.id }}" class="form-select form-select-sm status-select" onchange="toggleReason(this)">
                                             <option value="present" {% if rec and rec.status == 'present' %}selected{% endif %}>出勤</option>
                                             <option value="late" {% if rec and rec.status == 'late' %}selected{% endif %}>迟到</option>
@@ -62,7 +62,7 @@
                                             <option value="truant" {% if rec and rec.status == 'truant' %}selected{% endif %}>旷课</option>
                                         </select>
                                     </td>
-                                    <td>
+                                    <td data-label="课时">
                                         <div class="dropdown">
                                             <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" id="periodBtn_{{ s.id }}">
                                                 <span id="periodLabel_{{ s.id }}">{% if not rec or rec.status == 'present' %}全天{% elif rec.period %}{{ rec.period|popcount }}节{% else %}0节{% endif %}</span>
@@ -84,12 +84,12 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td>
+                                    <td data-label="原因">
                                         <input type="text" name="reason_{{ s.id }}" class="form-control form-control-sm reason-input"
                                                placeholder="原因" value="{{ rec.reason if rec else '' }}"
                                                {% if not rec or rec.status == 'present' %}disabled{% endif %}>
                                     </td>
-                                    <td>
+                                    <td data-label="凭证">
                                         <div class="d-flex align-items-center gap-1">
                                             <input type="file" name="image_{{ s.id }}" class="form-control form-control-sm" accept="image/*" style="width:100px;font-size:12px" onchange="previewImage(this)">
                                             {% if rec and rec.image_path %}

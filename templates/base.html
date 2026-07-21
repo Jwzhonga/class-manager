@@ -184,77 +184,131 @@
             padding: 0 20px 20px 20px;
         }
 
-        /* ── 移动端适配 ── */
+        /* ── 移动端适配（全面紧凑布局，无横向滚动） ── */
         @media (max-width: 767px) {
             body { overflow-x: hidden; }
-            .main-content-header { padding: 12px 12px 0 12px; }
-            .main-content-body { padding: 0 12px 12px 12px; }
-            .page-title { font-size: 16px; padding: 8px 0 4px; }
-            .stat-card { padding: 12px; }
-            .stat-card .number { font-size: 22px; }
 
-            /* 表格自动横向滚动 */
-            .table-responsive {
-                border: 0;
-                margin-bottom: 0;
-                -webkit-overflow-scrolling: touch;
-            }
-            .table-responsive table { min-width: 650px; }
-            .table th, .table td { font-size: 12px; padding: 4px !important; white-space: nowrap; }
+            /* 全局紧凑间距 */
+            .main-content-header { padding: 8px 10px 0 10px; }
+            .main-content-body { padding: 0 10px 10px 10px; }
+            .page-title { font-size: 15px; padding: 6px 0 3px; margin-bottom: 8px !important; }
 
-            /* 隐藏低频列以适配小屏 — 用 data-hide-mobile 标记 */
+            /* 卡片全面压缩 */
+            .card { margin-bottom: 8px; }
+            .card-body { padding: 8px 10px; }
+            .card-header { padding: 6px 10px; font-size: 13px; }
+            .card-header .btn-sm { font-size: 11px; padding: 2px 6px; }
+            .card-footer { padding: 4px 10px; font-size: 11px; }
+
+            /* 统计卡片紧凑 */
+            .stat-card { padding: 8px; margin-bottom: 6px; }
+            .stat-card .number { font-size: 18px; }
+            .stat-card .label { font-size: 11px; }
+            .row.g-2 { gap: 4px !important; margin: 0; }
+            .row.g-2 > [class*="col-"] { padding: 2px; }
+            .row.g-3 { gap: 6px !important; margin: 0; }
+            .row.g-3 > [class*="col-"] { padding: 3px; }
+            .mb-3 { margin-bottom: 6px !important; }
+            .mb-4 { margin-bottom: 8px !important; }
+            .gap-2 { gap: 4px !important; }
+            .gap-3 { gap: 6px !important; }
+            .p-2 { padding: 6px !important; }
+            .p-3 { padding: 8px !important; }
+            .py-4 { padding-top: 8px !important; padding-bottom: 8px !important; }
+            .px-3 { padding-left: 8px !important; padding-right: 8px !important; }
+
+            /* 无横向滚动：所有表格改为卡片模式 */
+            .table-responsive { border: 0; margin-bottom: 0; overflow: visible; }
+            .table-responsive table { min-width: 0; }
+            .table th, .table td { font-size: 11px; padding: 3px !important; }
+
+            /* 隐藏低频列 */
             .hide-mobile { display: none !important; }
 
-            /* 卡片在移动端更紧凑 */
-            .card-body { padding: 12px; }
-
             /* 考勤侧栏堆叠 */
-            .attendance-sidebar { margin-top: 12px; }
+            .attendance-sidebar { margin-top: 8px; }
 
-            /* 按钮组在移动端换行 */
-            .btn-group-responsive {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px;
-            }
-            .btn-group-responsive .btn { flex: 1 1 auto; min-width: 0; }
+            /* 按钮组紧凑 */
+            .btn-group-responsive { display: flex; flex-wrap: wrap; gap: 3px; }
+            .btn-group-responsive .btn { flex: 1 1 auto; min-width: 0; font-size: 11px; padding: 2px 6px; }
+            .btn { font-size: 12px; padding: 3px 8px; }
+            .btn-sm { font-size: 11px; padding: 2px 6px; }
 
-            /* 移动端顶部间距 + 清除桌面侧边栏占位 */
-            .main-content-wrap { padding-top: 52px; margin-left: 0 !important; }
+            /* 顶部间距 + 清除侧边栏占位 */
+            .main-content-wrap { padding-top: 48px; margin-left: 0 !important; }
 
-            /* 统计卡片移动端 2 列布局 */
-            .row.g-3 .col-6 .stat-card { padding: 10px; }
+            /* form 元素紧凑 */
+            .form-control, .form-select { font-size: 12px !important; padding: 2px 6px !important; }
+            .form-control-sm { font-size: 11px !important; padding: 1px 4px !important; }
+            .input-group { flex-wrap: nowrap; }
+            .input-group > .form-control { min-width: 0; }
+
+            /* 模态框紧凑 */
+            .modal-header { padding: 8px 12px; }
+            .modal-body { padding: 8px 12px; }
+            .modal-footer { padding: 6px 12px; }
+            .modal-title { font-size: 14px; }
+            .modal-sm { max-width: 94% !important; margin: 20px auto; }
+
+            /* alert 紧凑 */
+            .alert { padding: 6px 10px; font-size: 12px; margin-bottom: 4px; }
+            .alert .btn-close { font-size: 10px; padding: 4px; }
+
+            /* 徽章紧凑 */
+            .badge { font-size: 10px; padding: 2px 5px; }
+
+            /* 仪表盘圆环缩小 */
+            .rounded-circle[style*="64px"] { width: 44px !important; height: 44px !important; }
+            .rounded-circle .fs-4 { font-size: 14px !important; }
+
+            /* 移动端顶部栏更矮 */
+            #mobileHeader { padding: 6px 12px !important; }
+            #mobileHeader h5 { font-size: 14px !important; }
+            #mobileHeader .btn-sm { font-size: 11px; padding: 2px 6px; }
         }
 
-        /* ── 移动端表格卡片模式（特小屏 480px 以下） ── */
-        @media (max-width: 480px) {
+        /* ── 移动端表格卡片模式（≤767px 所有手机生效） ── */
+        @media (max-width: 767px) {
             .table-card-mode thead { display: none; }
             .table-card-mode tbody tr {
                 display: block;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
                 border: 1px solid #e8e8e8;
-                border-radius: 6px;
-                padding: 8px;
+                border-radius: 5px;
+                padding: 6px 8px;
                 background: #fff;
             }
             .table-card-mode tbody td {
                 display: flex;
                 justify-content: space-between;
-                padding: 4px 0 !important;
+                padding: 3px 0 !important;
                 border: none;
                 white-space: normal;
                 font-size: 12px;
+                min-height: auto;
             }
             .table-card-mode tbody td::before {
                 content: attr(data-label);
                 font-weight: 600;
                 color: #666;
-                margin-right: 8px;
+                margin-right: 6px;
                 flex-shrink: 0;
+                font-size: 11px;
             }
             .table-card-mode tbody td[data-label="操作"] {
                 justify-content: flex-start;
                 gap: 4px;
+            }
+            .table-card-mode tbody td[data-label="操作"] .btn {
+                font-size: 10px;
+                padding: 1px 4px;
+            }
+            .table-card-mode tbody td[data-label="操作"] .btn i { font-size: 10px; }
+            /* 卡片模式下的下拉框和内联编辑缩小 */
+            .table-card-mode select, .table-card-mode input {
+                font-size: 11px !important;
+                padding: 1px 4px !important;
+                max-width: 140px;
             }
         }
 

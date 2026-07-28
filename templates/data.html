@@ -230,12 +230,63 @@
     </div>
 </div>
 
+<!-- 危险操作：初始化数据 -->
+<div class="card mb-4 border-danger">
+    <div class="card-header text-danger"><i class="fas fa-bomb me-2"></i>危险操作区</div>
+    <div class="card-body">
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>⚠ 初始化将清空所有数据！</strong> 包括学生信息、考勤、成绩、违纪、班费、实训、课表等全部记录，操作不可逆！<br>
+            <small>✱ 系统会在初始化前自动创建一次完整备份到服务器</small>
+        </div>
+        <p class="text-muted mb-3">如果您确定要清空所有数据重新开始，请点击下方按钮并按提示操作。</p>
+        <button type="button" class="btn btn-danger btn-lg px-5" data-bs-toggle="modal" data-bs-target="#resetModal">
+            <i class="fas fa-trash-alt me-2"></i>初始化全部数据
+        </button>
+    </div>
+</div>
+
+<!-- 初始化确认弹窗（三重确认） -->
+<div class="modal fade" id="resetModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-circle me-2"></i>⚠ 危险操作确认</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{{ url_for('data_reset') }}" onsubmit="return finalResetConfirm();">
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>此操作将永久删除所有数据！</strong> 包括：学生信息、考勤记录、成绩、处分违纪、班费账目、实训记录、课表等全部内容。
+                    </div>
+                    <p>请在下方完成两步确认：</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">① 输入「确认初始化」以确认操作意图</label>
+                        <input type="text" id="resetConfirmText" name="confirm_text" class="form-control" placeholder="请输入：确认初始化" required oninput="toggleResetBtn(this.value)">
+                        <small class="text-muted">必须准确输入「确认初始化」四个字</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">② 输入当前登录密码以验证身份</label>
+                        <input type="password" name="password" class="form-control" placeholder="输入登录密码" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" id="resetSubmitBtn" class="btn btn-danger" disabled>
+                        <i class="fas fa-trash-alt me-1"></i>我已了解风险，确认初始化
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-function restoreBackup(filename) {
-    document.getElementById('restoreFileName').textContent = filename;
-    document.getElementById('restoreForm').action = '/data/restore/' + encodeURIComponent(filename);
-    var modal = new bootstrap.Modal(document.getElementById('restoreModal'));
-    modal.show();
+function toggleResetBtn(val) {
+    document.getElementById('resetSubmitBtn').disabled = (val !== '确认初始化');
+}
+function finalResetConfirm() {
+    return confirm('⚠ 最后确认：这将清空所有数据且不可恢复，确定继续吗？');
 }
 </script>
 {% endblock %}

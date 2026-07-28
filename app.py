@@ -49,7 +49,12 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 365 * 24 * 3600  # 静态文件缓存1
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 MASTER_DB_URI = 'sqlite:///master.db'
 MASTER_DB_PATH = os.path.join(BASE_DIR, 'instance', 'master.db')
-USER_DB_DIR = os.path.join(BASE_DIR, 'instance', 'users')
+# fnOS 部署时用户数据库应存在 TRIM_PKGVAR 下，避免升级被清除
+_trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
+if _trim_pkgvar:
+    USER_DB_DIR = os.path.join(_trim_pkgvar, 'users')
+else:
+    USER_DB_DIR = os.path.join(BASE_DIR, 'instance', 'users')
 
 # gzip 压缩（跳过文件下载）
 @app.after_request
@@ -121,10 +126,17 @@ def check_login():
 
 
 def get_current_semester_id():
-    """获取当前选中的学期ID"""
+    """获取当前选中的学期ID
+    如果 session['semester_id'] 指向的学期已被删除，自动清空并回退
+    """
     sem_id = session.get('semester_id')
     if sem_id:
-        return sem_id
+        # 验证学期是否还存在（防止删除学期后 session 残留）
+        s = db.session.get(Semester, sem_id)
+        if s:
+            return sem_id
+        # 学期已被删除，清空 session
+        session.pop('semester_id', None)
     current = Semester.query.filter_by(is_current=True).first()
     return current.id if current else None
 
@@ -174,8 +186,15 @@ def inject_semester():
     current = Semester.query.filter_by(is_current=True).first()
     if not current and semesters:
         current = semesters[0]
-    sem_id = session.get('semester_id') or (current.id if current else None)
-    selected = db.session.get(Semester, sem_id) if sem_id else current
+    sem_id = session.get('semester_id')
+    selected = None
+    if sem_id:
+        selected = db.session.get(Semester, sem_id)
+        if not selected:
+            # 学期已被删除，清空 session
+            session.pop('semester_id', None)
+    if not selected:
+        selected = current
     return dict(semesters=semesters, current_semester=selected)
 
 
@@ -254,11 +273,27 @@ def get_master_conn():
     conn.commit()
     return conn
 
+def _migrate_user_db_from_old_location(user_id):
+    """从旧路径（v1.0.5 及以前）迁移用户数据库到新路径"""
+    old_dir = os.path.join(BASE_DIR, 'instance', 'users')
+    new_path = os.path.join(USER_DB_DIR, f'u{user_id}.db')
+    old_path = os.path.join(old_dir, f'u{user_id}.db')
+    # 旧数据库存在且新位置没有 → 复制迁移
+    if os.path.exists(old_path) and not os.path.exists(new_path):
+        os.makedirs(USER_DB_DIR, exist_ok=True)
+        import shutil
+        shutil.copy2(old_path, new_path)
+        try:
+            os.remove(old_path)  # 迁移后删除旧文件避免混淆
+        except Exception:
+            pass
+
 def switch_to_user_db(user_id):
     """切换到指定用户的独立业务数据库，如不存在则自动创建表"""
-    user_db_dir = os.path.join(BASE_DIR, 'instance', 'users')
-    os.makedirs(user_db_dir, exist_ok=True)
-    db_path = os.path.join(user_db_dir, f'u{user_id}.db')
+    os.makedirs(USER_DB_DIR, exist_ok=True)
+    db_path = os.path.join(USER_DB_DIR, f'u{user_id}.db')
+    # 升级兼容：检查旧路径（BASE_DIR/instance/users/）是否有数据
+    _migrate_user_db_from_old_location(user_id)
     switch_db(f'sqlite:///{db_path}')
 
 def is_on_master_db():
@@ -1273,6 +1308,7 @@ def student_add():
 
 
 @app.route('/students/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
 def student_edit(id):
     student = db.get_or_404(Student, id)
     if request.method == 'POST':
@@ -1306,6 +1342,7 @@ def student_edit(id):
 
 
 @app.route('/students/<int:id>/delete')
+@login_required
 def student_delete(id):
     student = db.get_or_404(Student, id)
     name = student.name
@@ -1334,6 +1371,7 @@ def student_delete(id):
 
 
 @app.route('/students/import', methods=['POST'])
+@login_required
 def student_import():
     file = request.files.get('file')
     if not file:
@@ -3844,11 +3882,19 @@ SCHEMA_VERSION = '1.0.36'
 
 
 def _get_db_path():
-    """获取当前用户的数据库文件路径"""
+    """获取当前用户的数据库文件路径（支持旧路径回退）"""
     try:
         uid = session.get('user_id')
         if uid:
-            return os.path.join(USER_DB_DIR, f'u{uid}.db')
+            new_path = os.path.join(USER_DB_DIR, f'u{uid}.db')
+            # 新路径存在则直接返回
+            if os.path.exists(new_path):
+                return new_path
+            # 新路径不存在，检查旧路径（升级兼容）
+            old_path = os.path.join(BASE_DIR, 'instance', 'users', f'u{uid}.db')
+            if os.path.exists(old_path):
+                return old_path
+            return new_path  # 都不存在也返回新路径（后续会自动创建）
     except Exception:
         pass
     trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
@@ -4304,6 +4350,79 @@ def data_restore_from_backup(filename):
         flash(f'恢复失败：{e}')
     except Exception as e:
         flash(f'恢复失败：{e}')
+
+    return redirect(url_for('data_management'))
+
+
+@app.route('/data/reset', methods=['POST'])
+@login_required
+def data_reset():
+    """【危险】清空当前用户的所有数据（三重确认）"""
+    confirm_text = request.form.get('confirm_text', '').strip()
+    password = request.form.get('password', '').strip()
+    user_id = session.get('user_id')
+    db_path = _get_db_path()
+
+    # 第一重：必须输入 "确认初始化"
+    if confirm_text != '确认初始化':
+        flash('❌ 请准确输入「确认初始化」以验证操作意图')
+        return redirect(url_for('data_management'))
+
+    # 第二重：密码验证
+    old_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    try:
+        switch_db(MASTER_DB_URI)
+        user = db.session.get(MasterUser, user_id)
+        if not user or not user.check_password(password):
+            if old_uri != MASTER_DB_URI:
+                switch_db(old_uri)
+            flash('❌ 密码错误，初始化操作已取消')
+            return redirect(url_for('data_management'))
+    finally:
+        if old_uri != MASTER_DB_URI:
+            switch_db(old_uri)
+
+    # 第三重：已经在 HTML 层面通过 `confirm()` 拦截了
+    # 后端也要有保护：检查是否有数据
+    try:
+        # 自动备份当前数据库
+        import shutil
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if os.path.exists(db_path):
+            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_reset_{timestamp}_{user_id}.db')
+            shutil.copy2(db_path, auto_backup_path)
+
+        # 清空所有业务表（按外键依赖顺序从子到父）
+        db.session.execute(db.text('DELETE FROM attendance'))
+        db.session.execute(db.text('DELETE FROM grade'))
+        db.session.execute(db.text('DELETE FROM teaching_grade'))
+        db.session.execute(db.text('DELETE FROM discipline'))
+        db.session.execute(db.text('DELETE FROM violation_record'))
+        db.session.execute(db.text('DELETE FROM class_fund'))
+        db.session.execute(db.text('DELETE FROM training_record'))
+        db.session.execute(db.text('DELETE FROM training_group_student'))
+        db.session.execute(db.text('DELETE FROM training_group'))
+        db.session.execute(db.text('DELETE FROM training_project'))
+        db.session.execute(db.text('DELETE FROM schedule'))
+        db.session.execute(db.text('DELETE FROM course_student'))
+        db.session.execute(db.text('DELETE FROM seat_assignment'))
+        db.session.execute(db.text('DELETE FROM seat'))
+        db.session.execute(db.text('DELETE FROM student'))
+        db.session.execute(db.text('DELETE FROM subject'))
+
+        # 清空学期，创建一个默认学期
+        db.session.execute(db.text('DELETE FROM semester'))
+        from datetime import date
+        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025, 9, 1),
+                     end_date=date(2026, 1, 15), is_current=True)
+        db.session.add(s)
+        db.session.commit()
+        session['semester_id'] = s.id
+
+        flash(f'✅ 数据已全部清空！自动备份已保存：auto_backup_before_reset_{timestamp}_{user_id}.db')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'❌ 初始化失败：{e}')
 
     return redirect(url_for('data_management'))
 

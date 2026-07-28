@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、座位安排、处分管理、违纪记录、班费收支、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.0.37  
+**版本**: v1.0.5  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.37  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.5  
 
 ---
 
@@ -37,6 +37,49 @@ python3 -c "from waitress import serve; from app import app; serve(app, host='0.
 ## 飞牛 NAS 部署
 
 从 [Releases](https://github.com/Jwzhonga/class-manager/releases) 下载 `Classmanager.fpk`，在飞牛应用中心手动安装。安装过程自动下载 Python 依赖（清华镜像源），数据库持久化在应用数据目录，升级不丢失数据。
+
+---
+
+# 更新日志
+
+## v1.0.5 (2026-07-28)
+
+### 🔒 安全加固
+- `secret_key` 硬编码改为环境变量
+- `student_quick_edit` 添加字段白名单，防止越权修改
+- 所有裸 `except:` 替换为 `except Exception:`
+- 注册密码最少6位
+
+### 🧩 系统隔离
+- 成绩管理与任课管理的科目彻底隔离（`source` 字段）
+- 任课成绩独立存储到 `TeachingGrade` 表，不操作主 `Student`/`Grade` 表
+- 学生列表自动过滤历史残留的 `TCH_` 前缀记录
+
+### 🐛 Bug 修复
+- 自动排座：修复 `<form>` 嵌套导致按钮提交到错误路由
+- 批量删除：修复 checkbox 字段名 `student_ids` vs `ids` 不匹配
+- 单删学生：补全关联表清理 + `flush()` 避免级联 NOT NULL 冲突
+- 多处成绩查询补全 `semester_id` 过滤
+
+### ⚡ 性能优化
+- `switch_db` 加入引擎缓存，避免每请求重建
+- 相同 URI 跳过引擎切换
+
+### 🧹 代码质量
+- 全部 35 处 `.query.get()` / `.query.get_or_404()` → `db.session.get()` / `db.get_or_404()`
+- 删除重复的 `_get_db_path()` 定义
+- 合并三份重复的数据库迁移逻辑
+- `__import__("time")` → `import time`
+
+### 📦 fpk 打包优化
+- 目录结构参照官方规范：`app/bin/` + `app/ui/`
+- `cmd/main` 重写：等待端口监听、PID 写入持久化目录、三重 status 检测
+- `install_callback` 使用清华镜像源加速依赖下载
+
+## v1.0.41 (2026-07-22)
+- 移除个人信息
+- 浅色主题/移动端适配/主题选择器
+- 多项界面优化
 
 ---
 

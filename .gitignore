@@ -1,7 +1,11 @@
-venv/
-instance/
 __pycache__/
-.DS_Store
 *.pyc
-*.db
+*.pyo
+instance/*.db
+instance/users/*.db
+.venv/
+*.bak
+.env
+.DS_Store
 static/uploads/*
+!static/uploads/.gitkeep

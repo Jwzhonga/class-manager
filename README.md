@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、座位安排、处分管理、违纪记录、班费收支、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.0.5  
+**版本**: v1.0.6  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.5  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.6  
 
 ---
 
@@ -41,6 +41,25 @@ python3 -c "from waitress import serve; from app import app; serve(app, host='0.
 ---
 
 # 更新日志
+
+## v1.0.6 (2026-07-28)
+
+### 🔴 数据消失根因修复
+- **fnOS 升级不会丢数据**：用户数据库改为 `TRIM_PKGVAR/users/`（持久化目录），避免 fpk 升级时被清除
+- **旧数据自动迁移**：新增 `_migrate_user_db_from_old_location()`，首次请求自动将 `instance/users/` 旧路径数据复制到新路径
+- **学期回退保护**：`session['semester_id']` 指向已删除学期时自动清空并回退
+- **路由安全**：`student_delete` / `student_import` / `student_edit` 补上 `@login_required`
+
+### 🆕 初始化按钮
+数据管理页面新增「危险操作区」卡片，**三重确认机制**：
+1. 必须输入「确认初始化」—— 文字不匹配则提交按钮禁用
+2. 验证当前登录密码
+3. 提交前 `confirm()` 弹窗拦截
+- 初始化前自动备份当前数据库，然后清空全部业务表并创建默认学期
+
+### 🧩 数据库路径兼容性
+- `_get_db_path()` 加入旧路径回退逻辑，升级后数据管理页面不报"文件不存在"
+- `switch_to_user_db()` 改用 `USER_DB_DIR` 全局变量，不再硬编码旧路径
 
 ## v1.0.5 (2026-07-28)
 
@@ -97,6 +116,8 @@ instance/
     ├── u2.db           # 用户2的业务数据（完全隔离）
     └── ...
 ```
+
+> **fnOS 部署**：用户数据库自动存储到 `TRIM_PKGVAR/users/`（持久化目录），升级 fpk 不会丢失。
 
 - 注册后自动创建独立业务数据库和默认学期
 - 用户之间数据完全隔离，互不可见

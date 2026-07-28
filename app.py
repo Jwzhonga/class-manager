@@ -26,11 +26,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from cryptography.fernet import Fernet
 from base64 import urlsafe_b64encode
+import time
 import hashlib
 
 # ── App配置 ──
 app = Flask(__name__)
-app.secret_key = 'class_management_secret_key_2024'
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 import os
 # 数据库路径：fnOS 上使用 TRIM_PKGVAR（持久化数据目录），否则用默认 instance/
 trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
@@ -67,7 +68,7 @@ def gzip_response(response):
                         data = data.encode('utf-8')
                     response.set_data(gz.compress(data))
                     response.headers['Content-Encoding'] = 'gzip'
-    except:
+    except Exception:
         pass
     return response
 
@@ -75,7 +76,7 @@ import json as json_module
 @app.template_filter('from_json')
 def from_json_filter(s):
     try: return json_module.loads(s) if s else []
-    except: return []
+    except Exception: return []
 
 def popcount(n):
     return bin(n).count('1') if n else 0
@@ -129,12 +130,12 @@ def get_current_semester_id():
 
 
 def get_semester_students():
-    """获取当前学期的学生列表"""
+    """获取当前学期的学生列表（不含 TCH_ 任课记录）"""
     sem_id = get_current_semester_id()
     q = Student.query
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
-    return q.order_by(Student.id).all()
+    return q.filter(~Student.student_id.startswith('TCH_')).order_by(Student.id).all()
 
 
 def get_semester_projects():
@@ -156,9 +157,9 @@ def get_semester_schedule():
 
 
 def get_semester_subject_objects():
-    """获取当前学期的Subject对象列表"""
+    """获取当前学期的Subject对象列表（仅成绩管理的科目）"""
     sem_id = get_current_semester_id()
-    q = Subject.query
+    q = Subject.query.filter_by(source='grade')
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     return q.order_by(Subject.id).all()
@@ -167,12 +168,14 @@ def get_semester_subject_objects():
 # 学期上下文注入
 @app.context_processor
 def inject_semester():
+    if request.endpoint in PUBLIC_ROUTES:
+        return dict(semesters=[], current_semester=None)
     semesters = Semester.query.order_by(Semester.start_date.desc()).all()
     current = Semester.query.filter_by(is_current=True).first()
     if not current and semesters:
         current = semesters[0]
     sem_id = session.get('semester_id') or (current.id if current else None)
-    selected = Semester.query.get(sem_id) if sem_id else current
+    selected = db.session.get(Semester, sem_id) if sem_id else current
     return dict(semesters=semesters, current_semester=selected)
 
 
@@ -181,14 +184,29 @@ TRUANCY_WARN_HOURS = 80  # 旷课预警阈值
 db = SQLAlchemy(app)
 
 # ── 多用户独立数据库函数（实际实现） ──
+_engine_cache = {}
+
 def switch_db(database_uri):
     """切换Flask-SQLAlchemy到指定的数据库URI（关闭旧连接，重新创建引擎）"""
+    abs_uri = _resolve_db_uri(database_uri)
+    # 检查当前引擎是否已经指向这个URI
+    ext = app.extensions['sqlalchemy']
+    for ref in list(ext._app_engines.data.keys()):
+        if ref() is app:
+            try:
+                current_url = str(ext._app_engines.data[ref][None].url)
+                if current_url == abs_uri:
+                    return  # 相同URI，不需要切换
+            except Exception:
+                pass
+            break
     db.session.remove()
     app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
-    # 重新初始化引擎
+    # 重新初始化引擎（使用缓存避免重复创建）
     from sqlalchemy import create_engine
-    abs_uri = _resolve_db_uri(database_uri)
-    new_engine = create_engine(abs_uri)
+    if abs_uri not in _engine_cache:
+        _engine_cache[abs_uri] = create_engine(abs_uri)
+    new_engine = _engine_cache[abs_uri]
     try:
         ext = app.extensions['sqlalchemy']
         for ref in list(ext._app_engines.data.keys()):
@@ -197,7 +215,7 @@ def switch_db(database_uri):
                 old.dispose()
                 ext._app_engines.data[ref][None] = new_engine
                 break
-    except:
+    except Exception:
         pass
     # 应用所有迁移
     _run_db_migrations()
@@ -214,44 +232,9 @@ def _resolve_db_uri(uri):
         return f'sqlite:///{path}'
     return uri
 
-
-def _get_db_path():
-    """获取当前用户的数据库文件路径"""
-    try:
-        uid = session.get('user_id')
-        if uid:
-            return os.path.join(USER_DB_DIR, f'u{uid}.db')
-    except:
-        pass
-    return MASTER_DB_PATH
-
-
 def _run_db_migrations():
-    """对新创建的数据库执行ALTER TABLE迁移"""
-    db_path = _get_db_path()
-    if not os.path.exists(db_path):
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        # student表迁移
-        for col, typ in [('dormitory','VARCHAR(32)'),('special_family','VARCHAR(64)'),
-                         ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
-                         ('special_physical_note','TEXT'),('remark','TEXT')]:
-            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-            except: pass
-        for col, typ in [('status','VARCHAR(16)')]:
-            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
-            except: pass
-        for col, typ in [('withdrawn_reason','TEXT')]:
-            try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-            except: pass
-        try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
-        except: pass
-        conn.commit()
-        conn.close()
-    except:
-        pass
+    """对新创建的数据库执行ALTER TABLE迁移（委托给 _run_alter_migrations）"""
+    _run_alter_migrations(_get_db_path())
 
 
 def get_master_conn():
@@ -295,7 +278,7 @@ def calc_expiry(incident_date):
     custom = request.form.get('expiry_date', '')
     if preset == 'custom' and custom:
         try: return date.fromisoformat(custom)
-        except: return None
+        except Exception: return None
     elif preset == '1m':
         d = incident_date.replace(month=incident_date.month + 1) if incident_date.month < 12 else date(incident_date.year + 1, 1, incident_date.day)
         return d
@@ -316,9 +299,9 @@ def calc_expiry(incident_date):
 
 # 科目管理辅助函数
 def get_subjects():
-    """获取当前学期的科目列表"""
+    """获取当前学期的科目列表（仅成绩管理的科目）"""
     sem_id = get_current_semester_id()
-    q = Subject.query
+    q = Subject.query.filter_by(source='grade')
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     return [s.name for s in q.order_by(Subject.id).all()]
@@ -450,6 +433,7 @@ class Subject(db.Model):
     teacher = db.Column(db.String(32), default='')
     class_name = db.Column(db.String(64), default='')  # 班级名称
     semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    source = db.Column(db.String(16), default='grade')  # 'grade'=成绩管理 / 'teaching'=任课管理
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
@@ -463,6 +447,31 @@ class CourseStudent(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     course = db.relationship('Subject', backref=db.backref('course_students', lazy='dynamic'))
+
+
+class TeachingGrade(db.Model):
+    """任课管理 - 成绩（独立于主成绩表，不与 Student 表关联）"""
+    __tablename__ = 'teaching_grade'
+    id = db.Column(db.Integer, primary_key=True)
+    course_student_id = db.Column(db.Integer, db.ForeignKey('course_student.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+    performance_score = db.Column(db.Float, default=0)
+    homework_score = db.Column(db.Float, default=0)
+    notes_score = db.Column(db.Float, default=0)
+    exam_score = db.Column(db.Float, default=0)
+    comprehensive_score = db.Column(db.Float, default=0)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    course_student = db.relationship('CourseStudent', backref=db.backref('teaching_grades', lazy='dynamic'))
+
+    def calc_comprehensive(self):
+        self.comprehensive_score = round(
+            self.performance_score * 0.2 +
+            self.homework_score * 0.2 +
+            self.notes_score * 0.2 +
+            self.exam_score * 0.4, 1)
+        return self.comprehensive_score
 
 
 class Discipline(db.Model):
@@ -813,6 +822,9 @@ def register():
         if not username or not password:
             flash('请填写所有字段')
             return render_template('register.html')
+        if len(password) < 6:
+            flash('密码至少6位')
+            return render_template('register.html')
         # 切换到主数据库检查是否已存在
         if not is_on_master_db():
             switch_db(MASTER_DB_URI)
@@ -848,7 +860,7 @@ def logout():
 @app.route('/semester/set', methods=['POST'])
 def semester_set():
     sem_id = request.form.get('semester_id', type=int)
-    if sem_id and Semester.query.get(sem_id):
+    if sem_id and db.session.get(Semester, sem_id):
         session['semester_id'] = sem_id
     return redirect(request.referrer or url_for('index'))
 
@@ -869,7 +881,7 @@ def semester_add():
             db.session.commit()
             session['semester_id'] = s.id
             flash(f'学期「{name}」已创建')
-        except:
+        except Exception:
             flash('日期格式错误')
     else:
         flash('请填写完整信息')
@@ -883,7 +895,10 @@ def student_quick_edit():
     sid = request.form.get('id', type=int)
     field = request.form.get('field', '')
     value = request.form.get('value', '')
-    student = Student.query.get_or_404(sid)
+    student = db.get_or_404(Student, sid)
+    ALLOWED_FIELDS = {'live_mode', 'poverty_status', 'dormitory', 'ethnic', 'residence_type', 'phone', 'parent_phone'}
+    if field not in ALLOWED_FIELDS:
+        return jsonify({'ok': False, 'error': '不允许修改该字段'})
     if hasattr(student, field):
         setattr(student, field, value)
         db.session.commit()
@@ -895,7 +910,7 @@ def student_quick_edit():
 @login_required
 def student_batch_delete():
     """批量删除学生"""
-    ids = request.form.getlist('ids')
+    ids = request.form.getlist('student_ids')
     if not ids:
         flash('未选择学生')
         return redirect(url_for('student_list'))
@@ -903,7 +918,7 @@ def student_batch_delete():
     action = request.form.get('action', 'delete')
     if action == 'withdraw':
         for sid in ids:
-            s = Student.query.get(int(sid))
+            s = db.session.get(Student, int(sid))
             reason = request.form.get(f'reason_{sid}', '').strip()
             if s and s.status != 'withdrawn' and reason:
                 s.status = 'withdrawn'
@@ -914,13 +929,20 @@ def student_batch_delete():
         flash(f'已将 {count} 名学生标记为流失')
     else:
         for sid in ids:
-            s = Student.query.get(int(sid))
+            s = db.session.get(Student, int(sid))
             if s:
                 Attendance.query.filter_by(student_id=s.id).delete()
                 Grade.query.filter_by(student_id=s.id).delete()
+                CourseStudent.query.filter_by(name=s.name, semester_id=get_current_semester_id()).delete()
                 TrainingRecord.query.filter_by(student_id=s.id).delete()
                 Discipline.query.filter_by(student_id=s.id).delete()
                 ViolationRecord.query.filter_by(student_id=s.id).delete()
+                SeatAssignment.query.filter_by(student_id=s.id).delete()
+                try:
+                    db.session.execute(db.text('DELETE FROM training_group_student WHERE student_id = :sid'), {'sid': s.id})
+                except Exception:
+                    pass
+                db.session.flush()
                 db.session.delete(s)
                 count += 1
         db.session.commit()
@@ -938,7 +960,7 @@ def student_batch_withdraw():
         return redirect(url_for('student_list'))
     count = 0
     for sid in ids:
-        s = Student.query.get(int(sid))
+        s = db.session.get(Student, int(sid))
         if s and s.status != 'withdrawn':
             s.status = 'withdrawn'
             db.session.add(s)
@@ -951,7 +973,7 @@ def student_batch_withdraw():
 @app.route('/semester/<int:id>/rename', methods=['POST'])
 @login_required
 def semester_rename(id):
-    sem = Semester.query.get_or_404(id)
+    sem = db.get_or_404(Semester, id)
     name = request.form.get('name', '').strip()
     if name:
         sem.name = name
@@ -961,8 +983,9 @@ def semester_rename(id):
 
 
 @app.route('/semester/<int:id>/delete', methods=['POST'])
+@login_required
 def semester_delete(id):
-    sem = Semester.query.get_or_404(id)
+    sem = db.get_or_404(Semester, id)
     name = sem.name
     # 删除关联数据
     Attendance.query.filter_by(semester_id=id).delete()
@@ -978,6 +1001,7 @@ def semester_delete(id):
     SeatAssignment.query.filter_by(semester_id=id).delete()
     Seat.query.filter_by(semester_id=id).delete()
     Schedule.query.filter_by(semester_id=id).delete()
+    db.session.execute(db.text('DELETE FROM training_group_student WHERE group_id IN (SELECT id FROM training_group WHERE semester_id = :sid)'), {'sid': id})
     db.session.delete(sem)
     db.session.commit()
     if session.get('semester_id') == id:
@@ -1079,6 +1103,8 @@ def student_list():
     students_query = Student.query.order_by(Student.id)
     if sem_id:
         students_query = students_query.filter_by(semester_id=sem_id)
+    # 排除任课管理历史遗留的 TCH_ 记录
+    students_query = students_query.filter(~Student.student_id.startswith('TCH_'))
     if filter_type == 'poverty':
         students_query = students_query.filter(Student.poverty_status.in_(['贫困户', '是']))
     elif filter_type == 'boarding':
@@ -1248,7 +1274,7 @@ def student_add():
 
 @app.route('/students/<int:id>/edit', methods=['GET', 'POST'])
 def student_edit(id):
-    student = Student.query.get_or_404(id)
+    student = db.get_or_404(Student, id)
     if request.method == 'POST':
         student.name = request.form.get('name', '').strip()
         student.class_name = request.form.get('class_name', '')
@@ -1281,15 +1307,29 @@ def student_edit(id):
 
 @app.route('/students/<int:id>/delete')
 def student_delete(id):
-    student = Student.query.get_or_404(id)
+    student = db.get_or_404(Student, id)
     name = student.name
-    # 删除关联记录
-    Attendance.query.filter_by(student_id=id).delete()
-    Grade.query.filter_by(student_id=id).delete()
-    TrainingRecord.query.filter_by(student_id=id).delete()
-    db.session.delete(student)
-    db.session.commit()
-    flash(f'学生 {name} 已删除')
+    try:
+        # 删除关联记录
+        Attendance.query.filter_by(student_id=id).delete()
+        Grade.query.filter_by(student_id=id).delete()
+        TrainingRecord.query.filter_by(student_id=id).delete()
+        Discipline.query.filter_by(student_id=id).delete()
+        ViolationRecord.query.filter_by(student_id=id).delete()
+        SeatAssignment.query.filter_by(student_id=id).delete()
+        # 清理实训分组多对多关联
+        try:
+            db.session.execute(db.text('DELETE FROM training_group_student WHERE student_id = :sid'), {'sid': id})
+        except Exception:
+            pass
+        # flush确保session同步后再删主记录，避免级联NOT NULL冲突
+        db.session.flush()
+        db.session.delete(student)
+        db.session.commit()
+        flash(f'学生 {name} 已删除')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'删除失败: {e}')
     return redirect(url_for('student_list'))
 
 
@@ -1392,7 +1432,7 @@ def student_import():
     finally:
         try:
             os.remove(temp_path)
-        except:
+        except Exception:
             pass
     return redirect(url_for('student_list'))
 
@@ -1425,12 +1465,12 @@ def discipline_list():
 @app.route('/discipline/add', methods=['POST'])
 def discipline_add():
     student_id = request.form.get('student_id', type=int)
-    if not student_id or not Student.query.get(student_id):
+    if not student_id or not db.session.get(Student, student_id):
         flash('请选择学生')
         return redirect(url_for('discipline_list'))
     try:
         incident_date = date.fromisoformat(request.form['incident_date'])
-    except:
+    except Exception:
         incident_date = date.today()
     
     # 处理上传图片（支持多图）
@@ -1467,10 +1507,10 @@ def discipline_edit_form():
     if not id:
         flash('参数错误')
         return redirect(url_for('discipline_list'))
-    d = Discipline.query.get_or_404(id)
+    d = db.get_or_404(Discipline, id)
     try:
         d.incident_date = date.fromisoformat(request.form['incident_date'])
-    except:
+    except Exception:
         pass
     d.location = request.form.get('location', '')
     d.reason = request.form.get('reason', '')
@@ -1496,7 +1536,7 @@ def discipline_edit_form():
 
 @app.route('/discipline/<int:id>/delete')
 def discipline_delete(id):
-    d = Discipline.query.get_or_404(id)
+    d = db.get_or_404(Discipline, id)
     db.session.delete(d)
     db.session.commit()
     flash('处分记录已删除')
@@ -1513,10 +1553,10 @@ def export_discipline():
     query = Discipline.query
     if filter_start:
         try: query = query.filter(Discipline.incident_date >= date.fromisoformat(filter_start))
-        except: pass
+        except Exception: pass
     if filter_end:
         try: query = query.filter(Discipline.incident_date <= date.fromisoformat(filter_end))
-        except: pass
+        except Exception: pass
     if filter_student:
         qs = Student.query.filter(Student.name.contains(filter_student))
         qs = qs.filter_by(semester_id=get_current_semester_id())
@@ -1548,7 +1588,7 @@ def _export_discipline_pdf(records):
         if os.path.exists(fp):
             try:
                 pdfmetrics.registerFont(TTFont('CnFont', fp)); chinese_font = 'CnFont'; break
-            except: continue
+            except Exception: continue
     
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=A4,
@@ -1573,7 +1613,7 @@ def _export_discipline_pdf(records):
                     try:
                         elements.append(RLImage(full, width=400, height=300, kind='proportional'))
                         elements.append(Spacer(1, 4))
-                    except:
+                    except Exception:
                         elements.append(Paragraph(f'[图片]', style))
         # 显示告知书照片
         if r.image_letter:
@@ -1584,7 +1624,7 @@ def _export_discipline_pdf(records):
                     try:
                         elements.append(RLImage(full, width=400, height=300, kind='proportional'))
                         elements.append(Spacer(1, 4))
-                    except:
+                    except Exception:
                         elements.append(Paragraph(f'[图片]', style))
         elements.append(PageBreak())
     
@@ -1641,7 +1681,7 @@ def _export_discipline_excel(records):
                     ws.add_image(img, f'{chr(64+col)}{ri}')
                     ws.column_dimensions[chr(64+col)].width = max(20, img.width * 0.15)
                     col += 1
-                except:
+                except Exception:
                     pass
         ws.row_dimensions[ri].height = max(80, 150)
     
@@ -1672,46 +1712,51 @@ def attendance():
         except ValueError:
             form_date = today
 
-        for s in students:
-            status = request.form.get(f'status_{s.id}', 'present')
-            reason = request.form.get(f'reason_{s.id}', '')
-            image_file = request.files.get(f'image_{s.id}')
-            
-            row_period = int(request.form.get(f'period_sum_{s.id}', 2047))
-            row_period = max(0, min(2047, row_period))
+        try:
+            for s in students:
+                status = request.form.get(f'status_{s.id}', 'present')
+                reason = request.form.get(f'reason_{s.id}', '')
+                image_file = request.files.get(f'image_{s.id}')
+                
+                row_period = int(request.form.get(f'period_sum_{s.id}', 2047))
+                row_period = max(0, min(2047, row_period))
 
-            # 每人每天一条记录，按日期查找
-            existing = Attendance.query.filter_by(
-                student_id=s.id, date=form_date
-            ).first()
+                # 每人每天一条记录，按日期查找
+                existing = Attendance.query.filter_by(
+                    student_id=s.id, date=form_date
+                ).first()
 
-            if existing:
-                existing.status = status
-                existing.reason = reason
-                existing.period = row_period
-                if image_file and image_file.filename:
-                    ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
-                    safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
-                    save_path = os.path.join(UPLOAD_FOLDER, safe_name)
-                    image_file.save(save_path)
-                    existing.image_path = f'uploads/{safe_name}'
-            else:
-                image_path = ''
-                if image_file and image_file.filename:
-                    ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
-                    safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
-                    save_path = os.path.join(UPLOAD_FOLDER, safe_name)
-                    image_file.save(save_path)
-                    image_path = f'uploads/{safe_name}'
-                db.session.add(Attendance(
-                    student_id=s.id, date=form_date, status=status,
-                    reason=reason, period=row_period,
-                    image_path=image_path,
-                    semester_id=get_current_semester_id()
-                ))
-        db.session.commit()
-        flash(f'{form_date_str} 考勤已保存')
-        return redirect(url_for('attendance', date=form_date_str))
+                if existing:
+                    existing.status = status
+                    existing.reason = reason
+                    existing.period = row_period
+                    if image_file and image_file.filename:
+                        ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
+                        safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
+                        save_path = os.path.join(UPLOAD_FOLDER, safe_name)
+                        image_file.save(save_path)
+                        existing.image_path = f'uploads/{safe_name}'
+                else:
+                    image_path = ''
+                    if image_file and image_file.filename:
+                        ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
+                        safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
+                        save_path = os.path.join(UPLOAD_FOLDER, safe_name)
+                        image_file.save(save_path)
+                        image_path = f'uploads/{safe_name}'
+                    db.session.add(Attendance(
+                        student_id=s.id, date=form_date, status=status,
+                        reason=reason, period=row_period,
+                        image_path=image_path,
+                        semester_id=get_current_semester_id()
+                    ))
+            db.session.commit()
+            flash(f'{form_date_str} 考勤已保存')
+            return redirect(url_for('attendance', date=form_date_str))
+        except Exception:
+            db.session.rollback()
+            flash('考勤保存失败，请重试')
+            return redirect(url_for('attendance', date=form_date_str))
 
     # GET: 加载该日期的所有记录
     sem_id = get_current_semester_id()
@@ -1822,7 +1867,7 @@ def violation_add():
     sid = request.form.get('student_id', type=int)
     d = date.today()
     try: d = datetime.strptime(request.form.get('date',''), '%Y-%m-%d').date()
-    except: pass
+    except Exception: pass
     rd = min(15, max(1, request.form.get('reflection_days', type=int, default=1)))
     v = ViolationRecord(student_id=sid, date=d, reason=request.form.get('reason',''),
                         reflection_days=rd, reflection_start=d, reflection_end=add_date(d, rd),
@@ -1833,11 +1878,11 @@ def violation_add():
 @app.route('/violation/<int:id>/edit', methods=['GET','POST'])
 @login_required
 def violation_edit(id):
-    v = ViolationRecord.query.get_or_404(id)
+    v = db.get_or_404(ViolationRecord, id)
     if request.method == 'POST':
         v.student_id = request.form.get('student_id', type=int)
         try: v.date = datetime.strptime(request.form.get('date',''), '%Y-%m-%d').date()
-        except: pass
+        except Exception: pass
         v.reason = request.form.get('reason','')
         v.reflection_days = min(15, max(1, request.form.get('reflection_days', type=int, default=1)))
         v.reflection_start = v.date; v.reflection_end = add_date(v.date, v.reflection_days)
@@ -1849,7 +1894,7 @@ def violation_edit(id):
 @app.route('/violation/<int:id>/delete')
 @login_required
 def violation_delete(id):
-    v = ViolationRecord.query.get_or_404(id); db.session.delete(v); db.session.commit()
+    v = db.get_or_404(ViolationRecord, id); db.session.delete(v); db.session.commit()
     flash('已删除'); return redirect(url_for('violation_list'))
 
 
@@ -1858,8 +1903,7 @@ def violation_delete(id):
 def export_special_family():
     from openpyxl import Workbook, styles; import io
     sem_id=get_current_semester_id()
-    all_students=Student.query.order_by(Student.name).all()
-    if sem_id: all_students=[s for s in all_students if s.semester_id==sem_id]
+    all_students = get_semester_students()
     students=[s for s in all_students if s.special_family]
     wb=Workbook();ws=wb.active;ws.title='特殊家庭台账'
     thin=styles.Side(style='thin');bd=styles.Border(left=thin,right=thin,top=thin,bottom=thin)
@@ -1988,7 +2032,7 @@ def fund_list():
 def fund_add():
     d = date.today()
     try: d = datetime.strptime(request.form.get('date',''), '%Y-%m-%d').date()
-    except: pass
+    except Exception: pass
     ft = request.form.get('type', 'income')
     amount = request.form.get('amount', type=float, default=0)
     f = ClassFund(date=d, type=ft, amount=abs(amount), reason=request.form.get('reason',''),
@@ -1998,7 +2042,7 @@ def fund_add():
         file = request.files['voucher']
         if file and file.filename:
             ext = os.path.splitext(file.filename)[1] or '.jpg'
-            filename = f'fund_{int(__import__("time").time())}{ext}'
+            filename = f'fund_{int(time.time())}{ext}'
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             f.voucher = filename
     db.session.add(f); db.session.commit()
@@ -2007,10 +2051,10 @@ def fund_add():
 @app.route('/fund/<int:id>/delete')
 @login_required
 def fund_delete(id):
-    f = ClassFund.query.get_or_404(id)
+    f = db.get_or_404(ClassFund, id)
     if f.voucher:
         try: os.remove(os.path.join(UPLOAD_FOLDER, f.voucher))
-        except: pass
+        except Exception: pass
     db.session.delete(f); db.session.commit(); flash('已删除'); return redirect(url_for('fund_list'))
 
 @app.route('/export/fund-xlsx')
@@ -2064,7 +2108,7 @@ def export_fund_xlsx():
                     img.width = min(200, img.width)
                     img.height = img.width * PILImage.open(vpath).size[1] / PILImage.open(vpath).size[0]
                     ws.add_image(img, f'E{row}')
-                except: pass
+                except Exception: pass
             ws.cell(row=row, column=5, value='有凭据').border = bd
         ws.cell(row=row, column=6, value=r.notes).border = bd; ws.cell(row=row, column=6).font = df
         row += 1
@@ -2130,7 +2174,7 @@ def grade_save():
             exam = float(request.form.get(f'exam_{sid}', 0) or 0)
             if perf == 0 and hw == 0 and notes == 0 and exam == 0:
                 continue
-            g = Grade.query.filter_by(student_id=sid, subject=subject).first()
+            g = Grade.query.filter_by(student_id=sid, subject=subject, semester_id=get_current_semester_id()).first()
             if not g:
                 g = Grade(student_id=sid, subject=subject)
                 db.session.add(g)
@@ -2302,7 +2346,7 @@ def training_project_add():
 
 @app.route('/training/project/<int:id>/delete')
 def training_project_delete(id):
-    project = TrainingProject.query.get_or_404(id)
+    project = db.get_or_404(TrainingProject, id)
     TrainingRecord.query.filter_by(project_id=id).delete()
     name = project.name
     db.session.delete(project)
@@ -2342,7 +2386,7 @@ def training_record_add():
         except (ValueError, TypeError):
             flash('参数错误')
             return redirect(url_for('training'))
-        group = TrainingGroup.query.get(group_id)
+        group = db.session.get(TrainingGroup, group_id)
         if not group:
             flash('分组不存在')
             return redirect(url_for('training'))
@@ -2416,8 +2460,10 @@ def training_group_add():
 
 @app.route('/training/groups/<int:id>/delete', methods=['POST'])
 def training_group_delete(id):
-    group = TrainingGroup.query.get_or_404(id)
+    group = db.get_or_404(TrainingGroup, id)
     name = group.name
+    # 清理多对多关联
+    db.session.execute(db.text('DELETE FROM training_group_student WHERE group_id = :gid'), {'gid': id})
     # 不删除组内学生的历史实训记录，只删除分组本身
     db.session.delete(group)
     db.session.commit()
@@ -2427,13 +2473,13 @@ def training_group_delete(id):
 
 @app.route('/training/groups/<int:id>/students', methods=['POST'])
 def training_group_students(id):
-    group = TrainingGroup.query.get_or_404(id)
+    group = db.get_or_404(TrainingGroup, id)
     student_ids = request.form.getlist('student_ids')
     # 清空原有成员，重新添加
     group.students = []
     for sid in student_ids:
         try:
-            s = Student.query.get(int(sid))
+            s = db.session.get(Student, int(sid))
             if s:
                 group.students.append(s)
         except (ValueError, TypeError):
@@ -2581,12 +2627,12 @@ def seat_assign():
         return jsonify({'ok': False, 'error': '参数不完整'})
 
     # 验证座位属于当前学期
-    seat = Seat.query.get(seat_id)
+    seat = db.session.get(Seat, seat_id)
     if not seat or (sem_id and seat.semester_id != sem_id):
         return jsonify({'ok': False, 'error': '座位不存在'})
 
     # 验证学生属于当前学期
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student:
         return jsonify({'ok': False, 'error': '学生不存在'})
 
@@ -2812,7 +2858,7 @@ def schedule_add():
 
 @app.route('/schedule/<int:id>/delete')
 def schedule_delete(id):
-    s = Schedule.query.get_or_404(id)
+    s = db.get_or_404(Schedule, id)
     db.session.delete(s)
     db.session.commit()
     flash('课程已删除')
@@ -2833,7 +2879,7 @@ def schedule_move():
     if not all([schedule_id, new_day is not None, new_period]):
         return jsonify({'ok': False, 'error': '参数不完整'})
 
-    s = Schedule.query.get(schedule_id)
+    s = db.session.get(Schedule, schedule_id)
     if not s:
         return jsonify({'ok': False, 'error': '课程不存在'})
 
@@ -2841,7 +2887,7 @@ def schedule_move():
     old_period = s.period
 
     # 如果目标位置已有课程，交换
-    target = Schedule.query.filter_by(day_of_week=new_day, period=new_period).first()
+    target = Schedule.query.filter_by(day_of_week=new_day, period=new_period, semester_id=get_current_semester_id()).first()
     if target and target.id != s.id:
         target.day_of_week = old_day
         target.period = old_period
@@ -2914,14 +2960,14 @@ def schedule_upload():
                 flash(f'已从Excel解析并添加 {added} 条课程')
                 try:
                     os.remove(temp_path)
-                except:
+                except Exception:
                     pass
                 return redirect(url_for('schedule_view'))
         except Exception as e:
             flash(f'Excel解析失败: {e}')
             try:
                 os.remove(temp_path)
-            except:
+            except Exception:
                 pass
             return redirect(url_for('schedule_view'))
 
@@ -2947,7 +2993,7 @@ def schedule_upload():
             flash('请安装 pillow-heif 以支持HEIC格式')
             try:
                 os.remove(save_path)
-            except:
+            except Exception:
                 pass
             return redirect(url_for('schedule_view'))
     else:
@@ -3056,8 +3102,7 @@ def schedule_parse_sheet():
         # 先清空当前学期课表
         sem_id = get_current_semester_id()
         Schedule.query.filter_by(semester_id=sem_id).delete() if sem_id else None
-        ScheduleImage.query.delete()
-        
+        db.session.commit()
         courses = parse_excel_schedule(file_path, sheet_name)
         added = 0
         for c in courses:
@@ -3078,7 +3123,7 @@ def schedule_parse_sheet():
     finally:
         try:
             os.remove(file_path)
-        except:
+        except Exception:
             pass
 
     return redirect(url_for('schedule_view'))
@@ -3166,7 +3211,7 @@ def _export_pdf_generic(title, headers, rows, filename):
                 pdfmetrics.registerFont(TTFont('ChineseFont', font_path))
                 chinese_font = 'ChineseFont'
                 break
-            except:
+            except Exception:
                 continue
     
     # 若找不到中文字体，fallback 到 Helvetica
@@ -3228,10 +3273,10 @@ def export_attendance():
     base_query = Attendance.query
     if filter_start:
         try: base_query = base_query.filter(Attendance.date >= date.fromisoformat(filter_start))
-        except: pass
+        except Exception: pass
     if filter_end:
         try: base_query = base_query.filter(Attendance.date <= date.fromisoformat(filter_end))
-        except: pass
+        except Exception: pass
     
     if filter_student:
         qs = Student.query.filter(Student.name.contains(filter_student))
@@ -3302,7 +3347,7 @@ def _export_attendance_detail_pdf(rows, headers):
                 pdfmetrics.registerFont(TTFont('CnFont', fp))
                 chinese_font = 'CnFont'
                 break
-            except:
+            except Exception:
                 continue
     
     output = io.BytesIO()
@@ -3328,7 +3373,7 @@ def _export_attendance_detail_pdf(rows, headers):
                     img = RLImage(full_path, width=400, height=300, kind='proportional')
                     elements.append(img)
                     img_count += 1
-                except:
+                except Exception:
                     elements.append(Paragraph(f'[图片: {img_path}]', style))
             elements.append(Spacer(1, 4))
         
@@ -3380,7 +3425,7 @@ def _export_attendance_detail_excel(rows, headers):
                     img.height = img.width / aspect
                     ws.add_image(img, f'G{ri}')
                     ws.column_dimensions['G'].width = max(25, img.width * 0.15)
-                except:
+                except Exception:
                     pass
         ws.row_dimensions[ri].height = max(60, 130)
     
@@ -3485,7 +3530,7 @@ def export_grades():
 def teaching():
     """任课管理主页面：显示当前学期的科目列表（卡片式）"""
     sem_id = get_current_semester_id()
-    q = Subject.query
+    q = Subject.query.filter_by(source='teaching')
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     subjects = q.order_by(Subject.id).all()
@@ -3506,14 +3551,51 @@ def teaching():
 @app.route('/teaching/<int:course_id>/students')
 @login_required
 def teaching_students(course_id):
-    """查看某科目的学生列表"""
+    """查看某科目的学生列表（含成绩管理）"""
     sem_id = get_current_semester_id()
-    subject = Subject.query.get_or_404(course_id)
+    subject = db.get_or_404(Subject, course_id)
     q = CourseStudent.query.filter_by(course_id=course_id)
     if sem_id:
         q = q.filter_by(semester_id=sem_id)
     students = q.order_by(CourseStudent.id).all()
-    return render_template('teaching.html', subject=subject, students=students)
+    # 查询每个学生的成绩（从独立的 TeachingGrade 表，不操作主 Student/Grade）
+    grade_data = {}
+    for cs in students:
+        g = TeachingGrade.query.filter_by(course_student_id=cs.id, course_id=course_id, semester_id=sem_id).first()
+        grade_data[cs.id] = {'grade': g}
+    return render_template('teaching.html', subject=subject, students=students, grade_data=grade_data)
+
+
+@app.route('/teaching/<int:course_id>/grades/save', methods=['POST'])
+@login_required
+def teaching_grades_save(course_id):
+    """保存任课科目下所有学生的成绩（独立 TeachingGrade 表，不操作主 Student/Grade）"""
+    sem_id = get_current_semester_id()
+    subject = db.get_or_404(Subject, course_id)
+    for key, val in request.form.items():
+        if key.startswith('perf_'):
+            cs_id = int(key.split('_')[1])
+            cs = db.session.get(CourseStudent, cs_id)
+            if not cs:
+                continue
+            perf = float(val or 0)
+            hw = float(request.form.get(f'hw_{cs_id}', 0) or 0)
+            notes = float(request.form.get(f'notes_{cs_id}', 0) or 0)
+            exam = float(request.form.get(f'exam_{cs_id}', 0) or 0)
+            if perf == 0 and hw == 0 and notes == 0 and exam == 0:
+                continue
+            g = TeachingGrade.query.filter_by(course_student_id=cs_id, course_id=course_id, semester_id=sem_id).first()
+            if not g:
+                g = TeachingGrade(course_student_id=cs_id, course_id=course_id, semester_id=sem_id)
+                db.session.add(g)
+            g.performance_score = perf
+            g.homework_score = hw
+            g.notes_score = notes
+            g.exam_score = exam
+            g.calc_comprehensive()
+    db.session.commit()
+    flash(f'「{subject.name}」成绩已保存')
+    return redirect(url_for('teaching_students', course_id=course_id))
 
 
 @app.route('/teaching/<int:course_id>/import', methods=['POST'])
@@ -3521,7 +3603,7 @@ def teaching_students(course_id):
 def teaching_import(course_id):
     """导入学生：文本批量输入 或 Excel导入"""
     sem_id = get_current_semester_id()
-    subject = Subject.query.get_or_404(course_id)
+    subject = db.get_or_404(Subject, course_id)
     count = 0
 
     # 方式1：文本框批量导入（每行一个姓名）
@@ -3606,7 +3688,7 @@ def teaching_import(course_id):
 @login_required
 def teaching_student_delete(course_id, id):
     """删除任课科目下的某个学生"""
-    cs = CourseStudent.query.get_or_404(id)
+    cs = db.get_or_404(CourseStudent, id)
     db.session.delete(cs)
     db.session.commit()
     flash('已删除该学生')
@@ -3625,11 +3707,11 @@ def teaching_add_course():
         return redirect(url_for('teaching'))
     # 检查当前学期是否已存在同名科目
     sem_id = get_current_semester_id()
-    existing = Subject.query.filter_by(name=name, semester_id=sem_id).first()
+    existing = Subject.query.filter_by(name=name, source='teaching', semester_id=sem_id).first()
     if existing:
         flash(f'科目「{name}」已存在')
         return redirect(url_for('teaching'))
-    subject = Subject(name=name, teacher=teacher, semester_id=sem_id)
+    subject = Subject(name=name, teacher=teacher, semester_id=sem_id, source='teaching')
     db.session.add(subject)
     db.session.commit()
     flash(f'科目「{name}」已添加，教师: {teacher or "未设置"}')
@@ -3640,7 +3722,7 @@ def teaching_add_course():
 @login_required
 def teaching_delete_course(id):
     """删除科目及关联学生"""
-    subject = Subject.query.get_or_404(id)
+    subject = db.get_or_404(Subject, id)
     name = subject.name
     # 删除关联的CourseStudent
     CourseStudent.query.filter_by(course_id=id).delete()
@@ -3660,11 +3742,11 @@ def subject_add():
     name = request.form.get('name', '').strip()
     if not name:
         flash('请输入科目名称')
-    elif Subject.query.filter_by(name=name).first():
+    elif Subject.query.filter_by(name=name, source='grade', semester_id=get_current_semester_id()).first():
         flash(f'科目「{name}」已存在')
     else:
         db.session.add(Subject(name=name, teacher=request.form.get('teacher', '').strip(),
-                               semester_id=get_current_semester_id()))
+                               semester_id=get_current_semester_id(), source='grade'))
         db.session.commit()
         flash(f'科目「{name}」已添加')
     return redirect(url_for('grades'))
@@ -3672,9 +3754,9 @@ def subject_add():
 
 @app.route('/subject/<int:id>/delete')
 def subject_delete(id):
-    s = Subject.query.get_or_404(id)
+    s = db.get_or_404(Subject, id)
     name = s.name
-    Grade.query.filter_by(subject=name).delete()
+    Grade.query.filter_by(subject=name, semester_id=get_current_semester_id()).delete()
     db.session.delete(s)
     db.session.commit()
     flash(f'科目「{name}」已删除')
@@ -3767,7 +3849,7 @@ def _get_db_path():
         uid = session.get('user_id')
         if uid:
             return os.path.join(USER_DB_DIR, f'u{uid}.db')
-    except:
+    except Exception:
         pass
     trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
     if trim_pkgvar:
@@ -3792,7 +3874,11 @@ def _get_db_size():
 
 def _get_user_key(user_id):
     """从用户的密码哈希派生 Fernet 密钥"""
-    user = MasterUser.query.get(user_id)
+    old_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    switch_db(MASTER_DB_URI)
+    user = db.session.get(MasterUser, user_id)
+    if old_uri != MASTER_DB_URI:
+        switch_db(old_uri)
     if not user:
         return None
     # 用 password_hash 的 SHA-256 作为密钥材料，base64 编码后作为 Fernet 密钥
@@ -3867,18 +3953,18 @@ def _migrate_db_schema(db_path: str, from_version: str = ''):
             if col not in existing:
                 try:
                     c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "{default}"')
-                except:
+                except Exception:
                     pass
         # subject 表
         try:
             existing_subj = {row[1] for row in c.execute('PRAGMA table_info(subject)').fetchall()}
             if 'class_name' not in existing_subj:
                 c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
-        except:
+        except Exception:
             pass
         conn.commit()
         conn.close()
-    except:
+    except Exception:
         pass
 
 
@@ -3932,7 +4018,7 @@ def data_management():
                     if head:
                         backup_item['version'] = head['schema_version']
                         backup_item['user_id'] = head['user_id']
-                except:
+                except Exception:
                     pass
             # .db 文件：传统格式
             elif fname.endswith('.db'):
@@ -4038,7 +4124,7 @@ def data_upload():
             # 用输入的密码哈希解密（先验证用户身份 — 切换到主数据库查询）
             old_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
             switch_db(MASTER_DB_URI)
-            user = MasterUser.query.get(user_id)
+            user = db.session.get(MasterUser, user_id)
             if not user or not user.check_password(password_hash):
                 flash('密码验证失败，无法解密备份')
                 if old_uri != MASTER_DB_URI:
@@ -4070,6 +4156,8 @@ def data_upload():
             db.engine.dispose()
             with open(db_path, 'wb') as f:
                 f.write(file_bytes)
+            # 执行 schema 迁移
+            _run_alter_migrations(db_path)
             flash('数据已恢复！（传统 .db 格式）')
         else:
             flash('请上传 .cmb 或 .db 格式的文件')
@@ -4108,7 +4196,7 @@ def data_backups():
                             'mtime': mtime.isoformat(),
                             'version': head['schema_version'],
                         })
-                except:
+                except Exception:
                     pass
             elif fname.endswith('.db'):
                 backups.append({
@@ -4175,11 +4263,17 @@ def data_restore_from_backup(filename):
     db_path = _get_db_path()
 
     try:
-        # 验证密码
-        user = MasterUser.query.get(user_id)
+        # 验证密码 — 切换到主数据库查询
+        old_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        switch_db(MASTER_DB_URI)
+        user = db.session.get(MasterUser, user_id)
         if not user or not user.check_password(password):
+            if old_uri != MASTER_DB_URI:
+                switch_db(old_uri)
             flash('密码错误，无法解密备份')
             return redirect(url_for('data_management'))
+        if old_uri != MASTER_DB_URI:
+            switch_db(old_uri)
 
         # 读取并解密备份
         with open(backup_path, 'rb') as f:
@@ -4214,7 +4308,6 @@ def data_restore_from_backup(filename):
     return redirect(url_for('data_management'))
 
 
-# ── 旧数据库迁移辅助函数 ──
 def _run_alter_migrations(db_file):
     """对指定的数据库文件执行ALTER TABLE迁移（新增列）"""
     if not os.path.exists(db_file):
@@ -4227,17 +4320,25 @@ def _run_alter_migrations(db_file):
                          ('special_family_note','TEXT'),('special_physical','VARCHAR(8)'),
                          ('special_physical_note','TEXT'),('remark','TEXT')]:
             try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-            except: pass
+            except Exception: pass
         for col, typ in [('status','VARCHAR(16)')]:
             try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT "active"')
-            except: pass
+            except Exception: pass
         for col, typ in [('withdrawn_reason','TEXT')]:
             try: c.execute(f'ALTER TABLE student ADD COLUMN {col} {typ} DEFAULT ""')
-            except: pass
+            except Exception: pass
         try: c.execute('ALTER TABLE subject ADD COLUMN class_name VARCHAR(64) DEFAULT ""')
-        except: pass
+        except Exception: pass
+        try: c.execute('ALTER TABLE subject ADD COLUMN source VARCHAR(16) DEFAULT "grade"')
+        except Exception: pass
+        # 迁移现有数据：有CourseStudent的科目设为teaching
+        try:
+            c.execute("UPDATE subject SET source='teaching' WHERE id IN (SELECT DISTINCT course_id FROM course_student)")
+        except Exception:
+            pass
+        # 已有 Grade 记录的科目保持 source='grade'（默认值）
         conn.commit(); conn.close()
-    except:
+    except Exception:
         pass
 
 
@@ -4304,7 +4405,7 @@ def _do_migration(old_db_path):
         try:
             old_c.execute(f'SELECT COUNT(*) FROM "{tbl}"')
             old_count = old_c.fetchone()[0]
-        except:
+        except Exception:
             old_count = 0
 
         new_cursor = db.session.execute(f'SELECT COUNT(*) FROM "{tbl}"') if old_count > 0 else None
@@ -4312,7 +4413,7 @@ def _do_migration(old_db_path):
         if new_cursor:
             try:
                 new_count = new_cursor.fetchone()[0]
-            except:
+            except Exception:
                 pass
 
         if old_count > 0 and new_count == 0:
@@ -4321,7 +4422,7 @@ def _do_migration(old_db_path):
             try:
                 old_c.execute(f'PRAGMA table_info("{tbl}")')
                 table_info = old_c.fetchall()
-            except:
+            except Exception:
                 continue
 
             col_names = [col[1] for col in table_info if col[1]]
@@ -4332,7 +4433,7 @@ def _do_migration(old_db_path):
             try:
                 old_c.execute(f'SELECT * FROM "{tbl}"')
                 rows = old_c.fetchall()
-            except:
+            except Exception:
                 continue
 
             # 逐行插入
@@ -4373,7 +4474,7 @@ def _rename_old_db(old_db_path):
                 print(f'📦 旧数据库已备份为: {backup_name}')
             else:
                 os.remove(old_db_path)
-    except:
+    except Exception:
         pass
 
 
@@ -4440,7 +4541,7 @@ if __name__ == '__main__':
     for i, a in enumerate(sys.argv[1:], 1):
         if a == '--port' and i < len(sys.argv[1:])+1:
             try: port = int(sys.argv[i+1])
-            except: pass
+            except Exception: pass
     # 使用 waitress 生产级服务器（反代兼容）
     try:
         from waitress import serve

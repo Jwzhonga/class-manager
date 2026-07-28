@@ -38,7 +38,7 @@
 .select-student-modal .student-option:hover { background: #e6f7ff; }
 </style>
 
-<div class="page-title"><i class="fas fa-chair"></i> 💺 座位管理</div>
+<div class="page-title"><i class="fas fa-chair"></i> 座位管理</div>
 
 {% if max_rows == 0 or max_cols == 0 %}
 <div class="alert alert-info">
@@ -46,27 +46,29 @@
 </div>
 {% endif %}
 
-<form class="seat-toolbar" method="post" action="{{ url_for('seat_setup') }}">
-    <span><strong>座位网格：</strong></span>
-    <input type="number" name="rows" class="form-control form-control-sm" placeholder="行数" min="1" max="50" value="{{ max_rows or '' }}">
-    <span>×</span>
-    <input type="number" name="cols" class="form-control form-control-sm" placeholder="列数" min="1" max="50" value="{{ max_cols or '' }}">
-    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-table"></i> 初始化座位</button>
+<div class="seat-toolbar">
+    <form method="post" action="{{ url_for('seat_setup') }}" style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span><strong>座位网格：</strong></span>
+        <input type="number" name="rows" class="form-control form-control-sm" placeholder="行数" min="1" max="50" value="{{ max_rows or '' }}">
+        <span>×</span>
+        <input type="number" name="cols" class="form-control form-control-sm" placeholder="列数" min="1" max="50" value="{{ max_cols or '' }}">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-table"></i> 初始化座位</button>
+    </form>
 
     <div class="ms-auto d-flex gap-2">
-        <form method="post" action="{{ url_for('seat_auto') }}" style="display:inline">
+        <form method="post" action="{{ url_for('seat_auto') }}">
             <button type="submit" class="btn btn-success btn-sm" {% if max_rows == 0 %}disabled{% endif %}>
                 <i class="fas fa-random"></i> 自动排座
             </button>
         </form>
-        <form method="post" action="{{ url_for('seat_clear') }}" style="display:inline"
+        <form method="post" action="{{ url_for('seat_clear') }}"
               onsubmit="return confirm('确定清空所有座位安排吗？')">
             <button type="submit" class="btn btn-danger btn-sm" {% if max_rows == 0 %}disabled{% endif %}>
                 <i class="fas fa-eraser"></i> 清空座位
             </button>
         </form>
     </div>
-</form>
+</div>
 
 {% if max_rows > 0 and max_cols > 0 %}
 <div class="text-center mb-2" style="font-size:13px;color:#666">

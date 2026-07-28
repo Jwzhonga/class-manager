@@ -18,26 +18,42 @@
     </div>
 </div>
 
-<!-- 学生列表 -->
+<!-- 学生列表（含成绩管理） -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="fas fa-users"></i> 学生列表（共 {{ students|length }} 人）</span>
     </div>
     <div class="card-body p-0">
         {% if students %}
-        <table class="table table-hover mb-0">
+        <form method="post" action="{{ url_for('teaching_grades_save', course_id=subject.id) }}">
+        <table class="table table-bordered mb-0 table-sm">
             <thead>
                 <tr>
-                    <th style="width:60px">#</th>
+                    <th style="width:40px">#</th>
                     <th>姓名</th>
-                    <th style="width:120px">操作</th>
+                    <th style="width:90px">课堂表现</th>
+                    <th style="width:90px">作业质量</th>
+                    <th style="width:90px">课堂笔记</th>
+                    <th style="width:90px">考试成绩</th>
+                    <th style="width:70px">综合分</th>
+                    <th style="width:90px">操作</th>
                 </tr>
             </thead>
             <tbody>
                 {% for s in students %}
+                {% set gd = grade_data.get(s.id, {'grade': None}) %}
                 <tr>
                     <td>{{ loop.index }}</td>
-                    <td>{{ s.name }}</td>
+                    <td><strong>{{ s.name }}</strong></td>
+                    <td><input type="number" name="perf_{{ s.id }}" value="{{ gd.grade.performance_score if gd.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                    <td><input type="number" name="hw_{{ s.id }}" value="{{ gd.grade.homework_score if gd.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                    <td><input type="number" name="notes_{{ s.id }}" value="{{ gd.grade.notes_score if gd.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                    <td><input type="number" name="exam_{{ s.id }}" value="{{ gd.grade.exam_score if gd.grade else '' }}" class="form-control form-control-sm" min="0" max="100" step="0.1"></td>
+                    <td class="text-center">
+                        {% if gd.grade and gd.grade.comprehensive_score %}
+                        <strong>{{ gd.grade.comprehensive_score }}</strong>
+                        {% else %}-{% endif %}
+                    </td>
                     <td>
                         <form method="post" action="{{ url_for('teaching_student_delete', course_id=subject.id, id=s.id) }}"
                               style="display:inline" onsubmit="return confirm('确定要删除学生「{{ s.name }}」吗？')">
@@ -50,6 +66,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        <div class="text-center p-3">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存「{{ subject.name }}」成绩</button>
+        </div>
+        </form>
         {% else %}
         <div class="text-center py-5 text-muted">
             <i class="fas fa-user-plus fa-3x mb-3 d-block"></i>

@@ -23,6 +23,7 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from flask_sqlalchemy import SQLAlchemy
 
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
 from cryptography.fernet import Fernet
 from base64 import urlsafe_b64encode
@@ -96,6 +97,20 @@ app.jinja_env.filters['popcount'] = popcount
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+ALLOWED_EXCEL_EXTENSIONS = {'xls', 'xlsx'}
+ALLOWED_SCHEDULE_IMAGE_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | {'heic', 'heif'}
+
+def _safe_upload_ext(filename, allowed, default=''):
+    """Return a trusted lowercase extension from an uploaded filename.
+    Extracts only the extension part (always ASCII like xls/jpg/png),
+    avoiding secure_filename's CJK-safe dot-stripping issue."""
+    orig = (filename or '').rsplit('.', 1)
+    if len(orig) > 1:
+        ext = orig[-1].lower()
+        return ext if ext in allowed else default
+    return default
+
 # ── 登录验证装饰器 ──
 def login_required(f):
     @wraps(f)
@@ -128,17 +143,25 @@ def check_login():
 def get_current_semester_id():
     """获取当前选中的学期ID
     如果 session['semester_id'] 指向的学期已被删除，自动清空并回退
+    无学期时自动选择第一个可用学期
     """
     sem_id = session.get('semester_id')
     if sem_id:
-        # 验证学期是否还存在（防止删除学期后 session 残留）
         s = db.session.get(Semester, sem_id)
         if s:
             return sem_id
-        # 学期已被删除，清空 session
         session.pop('semester_id', None)
+    # 无选中学期：尝试取 is_current 学期
     current = Semester.query.filter_by(is_current=True).first()
-    return current.id if current else None
+    if current:
+        session['semester_id'] = current.id
+        return current.id
+    # 尝试取第一个学期
+    first = Semester.query.order_by(Semester.id).first()
+    if first:
+        session['semester_id'] = first.id
+        return first.id
+    return None
 
 
 def get_semester_students():
@@ -996,8 +1019,10 @@ def student_batch_withdraw():
     count = 0
     for sid in ids:
         s = db.session.get(Student, int(sid))
+        reason = request.form.get(f'reason_{sid}', '').strip()
         if s and s.status != 'withdrawn':
             s.status = 'withdrawn'
+            s.withdrawn_reason = reason
             db.session.add(s)
             count += 1
     db.session.commit()
@@ -1378,17 +1403,32 @@ def student_import():
         flash('请选择文件')
         return redirect(url_for('student_list'))
 
-    filename = file.filename
-    if not (filename.endswith('.xls') or filename.endswith('.xlsx')):
+    # 确保有选中学期
+    sem_id = get_current_semester_id()
+    if not sem_id:
+        # 自动创建默认学期
+        now_year = datetime.now().year
+        sem = Semester(name=f'{now_year}-{now_year+1}学年度第1学期',
+                       start_date=date(now_year, 9, 1),
+                       end_date=date(now_year+1, 1, 15),
+                       is_current=True)
+        db.session.add(sem)
+        db.session.commit()
+        session['semester_id'] = sem.id
+        sem_id = sem.id
+        flash(f'已自动创建学期「{sem.name}」')
+
+    ext = _safe_upload_ext(file.filename, ALLOWED_EXCEL_EXTENSIONS)
+    if not ext:
         flash('仅支持 .xls 和 .xlsx 格式')
         return redirect(url_for('student_list'))
 
-    temp_path = os.path.join(UPLOAD_FOLDER, f'_import_{random.randint(1000,9999)}_{filename}')
+    temp_path = os.path.join(UPLOAD_FOLDER, f'_import_{random.randint(1000,9999)}_{secure_filename(file.filename or "unknown")}')
     file.save(temp_path)
 
     try:
         imported = 0
-        if temp_path.endswith('.xls'):
+        if ext == 'xls':
             import xlrd
             wb = xlrd.open_workbook(temp_path)
             sheet = wb.sheet_by_index(0)
@@ -1402,7 +1442,8 @@ def student_import():
                 if not name or len(name) > 20:
                     continue
                 stu_id = str(row[30]).strip().split('.')[0] if len(row) > 30 and row[30] else str(row[3]).strip().upper() if row[3] else ''
-                dup = Student.query.filter_by(name=name, id_card=stu_id, semester_id=get_current_semester_id()).first()
+                # 跨学期查重：同名+同身份证 在任何学期存在即跳过
+                dup = Student.query.filter_by(name=name, id_card=stu_id).first()
                 if dup:
                     continue
                 student = Student(
@@ -1442,7 +1483,7 @@ def student_import():
                     stu_id = str(row[30]).strip().split('.')[0]
                 elif len(row) > 3 and row[3]:
                     stu_id = str(row[3]).strip().upper()
-                if Student.query.filter_by(name=name, id_card=stu_id, semester_id=get_current_semester_id()).first():
+                if Student.query.filter_by(name=name, id_card=stu_id).first():
                     continue
                 student = Student(
                     name=name, student_id=generate_student_id(),
@@ -1481,8 +1522,8 @@ def discipline_save_image(file, student_id, tag):
     """保存处分相关图片"""
     if not file or not file.filename:
         return ''
-    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
-    if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+    ext = _safe_upload_ext(file.filename, ALLOWED_IMAGE_EXTENSIONS)
+    if not ext:
         return ''
     name = f'discipline_{student_id}_{tag}_{datetime.now().strftime("%Y%m%d%H%M%S")}_{random.randint(1000,9999)}.{ext}'
     path = os.path.join(UPLOAD_FOLDER, name)
@@ -1768,8 +1809,11 @@ def attendance():
                     existing.status = status
                     existing.reason = reason
                     existing.period = row_period
+                    existing.semester_id = get_current_semester_id()
                     if image_file and image_file.filename:
-                        ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
+                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS, 'jpg')
+                        if not ext:
+                            continue
                         safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
                         save_path = os.path.join(UPLOAD_FOLDER, safe_name)
                         image_file.save(save_path)
@@ -1777,7 +1821,9 @@ def attendance():
                 else:
                     image_path = ''
                     if image_file and image_file.filename:
-                        ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else 'jpg'
+                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS, 'jpg')
+                        if not ext:
+                            continue
                         safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
                         save_path = os.path.join(UPLOAD_FOLDER, safe_name)
                         image_file.save(save_path)
@@ -2079,7 +2125,11 @@ def fund_add():
     if 'voucher' in request.files:
         file = request.files['voucher']
         if file and file.filename:
-            ext = os.path.splitext(file.filename)[1] or '.jpg'
+            ext_name = _safe_upload_ext(file.filename, ALLOWED_IMAGE_EXTENSIONS)
+            if not ext_name:
+                flash('凭据仅支持 jpg、jpeg、png、gif、webp 图片')
+                return redirect(url_for('fund_list'))
+            ext = f'.{ext_name}'
             filename = f'fund_{int(time.time())}{ext}'
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             f.voucher = filename
@@ -2214,9 +2264,8 @@ def grade_save():
                 continue
             g = Grade.query.filter_by(student_id=sid, subject=subject, semester_id=get_current_semester_id()).first()
             if not g:
-                g = Grade(student_id=sid, subject=subject)
+                g = Grade(student_id=sid, subject=subject, semester_id=get_current_semester_id())
                 db.session.add(g)
-                g.semester_id = get_current_semester_id()
             g.performance_score = perf
             g.homework_score = hw
             g.notes_score = notes
@@ -2273,9 +2322,9 @@ def grade_import():
                     exam = float(row[ci+3] or 0) if ci+3 < len(row) and row[ci+3] else 0
                     if perf == 0 and hw == 0 and notes == 0 and exam == 0:
                         continue
-                    g = Grade.query.filter_by(student_id=student.id, subject=sub).first()
+                    g = Grade.query.filter_by(student_id=student.id, subject=sub, semester_id=get_current_semester_id()).first()
                     if not g:
-                        g = Grade(student_id=student.id, subject=sub)
+                        g = Grade(student_id=student.id, subject=sub, semester_id=get_current_semester_id())
                         db.session.add(g)
                     g.performance_score = perf
                     g.homework_score = hw
@@ -2287,9 +2336,9 @@ def grade_import():
                     imported += 1
             
             if sub_count > 0:
-                g_all = Grade.query.filter_by(student_id=student.id, subject='').first()
+                g_all = Grade.query.filter_by(student_id=student.id, subject='', semester_id=get_current_semester_id()).first()
                 if not g_all:
-                    g_all = Grade(student_id=student.id, subject='')
+                    g_all = Grade(student_id=student.id, subject='', semester_id=get_current_semester_id())
                     db.session.add(g_all)
                 g_all.overall_score = round(overall / sub_count, 1)
         
@@ -2877,7 +2926,7 @@ def schedule_add():
         return redirect(url_for('schedule_view'))
 
     # 检查是否有冲突
-    existing = Schedule.query.filter_by(day_of_week=day_of_week, period=period).first()
+    existing = Schedule.query.filter_by(day_of_week=day_of_week, period=period, semester_id=get_current_semester_id()).first()
     if existing:
         flash(f'{DAY_NAMES[day_of_week]} 第{period}节已有课程: {existing.course_name}')
         return redirect(url_for('schedule_view'))
@@ -2944,10 +2993,12 @@ def schedule_upload():
         flash('请选择文件')
         return redirect(url_for('schedule_view'))
 
-    filename = file.filename.lower()
-    is_excel = filename.endswith('.xls') or filename.endswith('.xlsx')
-    is_heic = filename.endswith('.heic') or filename.endswith('.heif')
-    ext = filename.rsplit('.', 1)[-1] if '.' in filename else 'jpg'
+    ext = _safe_upload_ext(file.filename, ALLOWED_EXCEL_EXTENSIONS | ALLOWED_SCHEDULE_IMAGE_EXTENSIONS)
+    if not ext:
+        flash('仅支持 Excel 或 jpg、jpeg、png、gif、webp、heic 图片')
+        return redirect(url_for('schedule_view'))
+    is_excel = ext in ALLOWED_EXCEL_EXTENSIONS
+    is_heic = ext in {'heic', 'heif'}
 
     if is_excel:
         # Excel处理
@@ -2957,7 +3008,7 @@ def schedule_upload():
         try:
             # 先获取所有sheet名称
             sheets = []
-            if filename.endswith('.xls'):
+            if ext == 'xls':
                 import xlrd
                 wb = xlrd.open_workbook(temp_path)
                 sheets = wb.sheet_names()
@@ -2982,7 +3033,8 @@ def schedule_upload():
                 added = 0
                 for c in courses:
                     existing = Schedule.query.filter_by(
-                        day_of_week=c['day_of_week'], period=c['period']
+                        day_of_week=c['day_of_week'], period=c['period'],
+                        semester_id=get_current_semester_id()
                     ).first()
                     if not existing:
                         db.session.add(Schedule(
@@ -2991,7 +3043,8 @@ def schedule_upload():
                             course_name=c['course_name'],
                             teacher=c.get('teacher', ''),
                             location=c.get('location', ''),
-                            is_training=c.get('is_training', False)
+                            is_training=c.get('is_training', False),
+                            semester_id=get_current_semester_id()
                         ))
                         added += 1
                 db.session.commit()
@@ -3526,7 +3579,7 @@ def export_grades():
     
     # 数据行
     for ri, s in enumerate(students, 5):
-        g = Grade.query.filter_by(student_id=s.id, subject=current_subject).first()
+        g = Grade.query.filter_by(student_id=s.id, subject=current_subject, semester_id=get_current_semester_id()).first()
         ws.cell(row=ri, column=1, value=ri-4).font = normal_font
         ws.cell(row=ri, column=1).alignment = center
         ws.cell(row=ri, column=1).border = thin
@@ -3668,19 +3721,19 @@ def teaching_import(course_id):
     # 方式2：Excel导入
     file = request.files.get('file')
     if file and file.filename:
-        filename = file.filename.lower()
-        if not (filename.endswith('.xls') or filename.endswith('.xlsx')):
+        ext = _safe_upload_ext(file.filename, ALLOWED_EXCEL_EXTENSIONS)
+        if not ext:
             flash('请上传Excel文件 (.xls/.xlsx)')
             return redirect(url_for('teaching_students', course_id=course_id))
 
         import tempfile
         import os
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}')
         file.save(tmp.name)
         tmp.close()
         try:
             names = []
-            if filename.endswith('.xls'):
+            if ext == 'xls':
                 import xlrd
                 wb = xlrd.open_workbook(tmp.name)
                 sheet = wb.sheet_by_index(0)
@@ -3818,7 +3871,7 @@ def export_training():
 
     rows = []
     for s in students:
-        records = TrainingRecord.query.filter_by(student_id=s.id).all()
+        records = TrainingRecord.query.filter_by(student_id=s.id, semester_id=get_current_semester_id()).all()
         row = [s.name, s.student_id]
         total_projects = 0
         for p in projects:
@@ -4527,7 +4580,7 @@ def _do_migration(old_db_path):
         except Exception:
             old_count = 0
 
-        new_cursor = db.session.execute(f'SELECT COUNT(*) FROM "{tbl}"') if old_count > 0 else None
+        new_cursor = db.session.execute(db.text(f'SELECT COUNT(*) FROM "{tbl}"')) if old_count > 0 else None
         new_count = 0
         if new_cursor:
             try:
@@ -4559,10 +4612,8 @@ def _do_migration(old_db_path):
             placeholders = ','.join(['?' for _ in col_names])
             for row in rows:
                 try:
-                    db.session.execute(
-                        f'INSERT INTO "{tbl}" ({",".join(col_names)}) VALUES ({placeholders})',
-                        row
-                    )
+                    sql = f'INSERT INTO "{tbl}" ({",".join(col_names)}) VALUES ({placeholders})'
+                    db.session.connection().exec_driver_sql(sql, tuple(row))
                 except Exception as insert_err:
                     pass  # 跳过冲突行
 

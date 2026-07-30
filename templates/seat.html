@@ -9,14 +9,14 @@
     cursor: pointer; transition: all 0.2s; position: relative;
     background: #fff; user-select: none;
 }
-.seat-cell.occupied { background: #e6f7ff; border-color: #1890ff; }
+.seat-cell.occupied { background: rgba(0,122,255,0.08); border-color: #007aff; }
 .seat-cell.occupied:hover { background: #bae7ff; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,144,255,0.2); }
 .seat-cell.empty { background: #fafafa; border-style: dashed; }
-.seat-cell.empty:hover { background: #f0f0f0; border-color: #999; }
-.seat-cell.drag-over { border-color: #52c41a; background: #f6ffed; transform: scale(1.05); }
+.seat-cell.empty:hover { background: #f5f5f7; border-color: #999; }
+.seat-cell.drag-over { border-color: #34c759; background: #f6ffed; transform: scale(1.05); }
 .seat-cell.dragging { opacity: 0.4; }
-.seat-name { font-size: 11px; color: #999; position: absolute; top: 2px; left: 6px; }
-.seat-student { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-top: 10px; }
+.seat-name { font-size: 11px; color: #86868b; position: absolute; top: 2px; left: 6px; }
+.seat-student { font-size: 14px; font-weight: 600; color: #1d1d1f; margin-top: 10px; }
 .seat-empty-text { font-size: 12px; color: #bbb; margin-top: 14px; }
 
 .unassigned-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -25,7 +25,7 @@
     border: 1px solid #d9d9d9; border-radius: 16px; cursor: grab;
     font-size: 13px; transition: all 0.2s;
 }
-.unassigned-item:hover { border-color: #1890ff; color: #1890ff; background: #e6f7ff; }
+.unassigned-item:hover { border-color: #007aff; color: #007aff; background: rgba(0,122,255,0.08); }
 .unassigned-item.dragging { opacity: 0.4; }
 
 .seat-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
@@ -35,7 +35,7 @@
 .select-student-modal.show { display: flex; }
 .select-student-modal .modal-content { background: #fff; border-radius: 8px; padding: 20px; min-width: 300px; max-height: 70vh; overflow-y: auto; }
 .select-student-modal .student-option { padding: 8px 12px; cursor: pointer; border-radius: 4px; }
-.select-student-modal .student-option:hover { background: #e6f7ff; }
+.select-student-modal .student-option:hover { background: rgba(0,122,255,0.08); }
 </style>
 
 <div class="page-title"><i class="fas fa-chair"></i> 座位管理</div>
@@ -71,7 +71,7 @@
 </div>
 
 {% if max_rows > 0 and max_cols > 0 %}
-<div class="text-center mb-2" style="font-size:13px;color:#666">
+<div class="text-center mb-2" style="font-size:13px;color:#6e6e73">
     拖拽学生姓名可交换座位，将下方未安排学生拖到空座位上可安排入座
 </div>
 
@@ -122,7 +122,7 @@
     </div>
     {% endfor %}
     {% if not unassigned_students %}
-    <span style="color:#999;font-size:13px">所有学生已安排座位</span>
+    <span style="color:#86868b;font-size:13px">所有学生已安排座位</span>
     {% endif %}
 </div>
 {% endif %}
@@ -141,7 +141,7 @@
             </div>
             {% endfor %}
             {% if not unassigned_students %}
-            <div style="color:#999;font-size:13px;padding:12px;">所有学生已安排座位</div>
+            <div style="color:#86868b;font-size:13px;padding:12px;">所有学生已安排座位</div>
             {% endif %}
         </div>
     </div>

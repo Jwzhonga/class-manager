@@ -62,9 +62,9 @@ new Chart(document.getElementById('attendanceChart'), {
     data: {
         labels: {{ chart_dates|tojson }},
         datasets: [
-            { label: '旷课', data: {{ chart_truant|tojson }}, backgroundColor: '#ff4d4f' },
-            { label: '病假', data: {{ chart_sick|tojson }}, backgroundColor: '#faad14' },
-            { label: '事假', data: {{ chart_personal|tojson }}, backgroundColor: '#1890ff' }
+            { label: '旷课', data: {{ chart_truant|tojson }}, backgroundColor: '#ff3b30' },
+            { label: '病假', data: {{ chart_sick|tojson }}, backgroundColor: '#ff9500' },
+            { label: '事假', data: {{ chart_personal|tojson }}, backgroundColor: '#007aff' }
         ]
     },
     options: {

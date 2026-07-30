@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、座位安排、处分管理、违纪记录、班费收支、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.0.6  
+**版本**: v1.0.7  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.6  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.0.7  
 
 ---
 
@@ -41,6 +41,40 @@ python3 -c "from waitress import serve; from app import app; serve(app, host='0.
 ---
 
 # 更新日志
+
+## v1.0.7 (2026-07-30)
+
+### 🎨 全面 UI 改造
+- **Apple 设计系统**：全站配色改为 Apple HIG 色彩系统（`#007aff` 苹果蓝、`#34c759` 绿、`#ff3b30` 红等）
+- **磨砂玻璃效果**：侧边栏/导航/卡片增加 `backdrop-filter: blur()` 毛玻璃效果
+- **表单/按钮统一风格**：圆角 8px、极细边框、柔和阴影
+- **统计卡片 5 列布局**：学生管理 10 张卡片一行 5 个
+- **表格列宽优化**：`table-layout:fixed` + 修复 `!important` 内边距冲突
+
+### 🔒 安全加固（Codex + 人工审查）
+- **文件上传白名单**：`_safe_upload_ext()` 统一校验扩展名
+- **修复 CJK 文件名上传**：`secure_filename` 吃掉中文文件名的点号导致上传被拒
+- **依赖补全**：`requirements.txt` 补 `cryptography`、`xlrd`
+
+### 🗄️ 学期数据隔离大修
+- **自动选学期**：无学期时不再显示全部数据，自动选中第一个
+- **15 个模型全覆盖**：检查所有含 `semester_id` 的模型（Student/Attendance/Grade/Discipline 等）的创建/更新/查询路径
+- **修复多处遗漏**：Grade 导入、Schedule 导入、导出查询等 6 处 semester_id 缺失
+- **跨学期查重**：导入学生时按姓名+身份证全学期查重，杜绝跨学期重复
+
+### 🐛 Bug 修复
+- **流失功能失效**：`batchWithdraw()` 的 `name="ids"` 与后端 `request.form.getlist('student_ids')` 不匹配 → 已修复
+- **备份恢复按钮无反应**：`data.html` 中 `restoreBackup()` 函数缺失 → 已补全
+- **考勤右侧无记录**：旧考勤数据 `semester_id=NULL` 被学期过滤排除 → 已迁移
+- **Chart.js CDN**：考勤统计页引用 `cdn.bootcdn.net`，NAS 上可能加载失败 → 已本地化
+
+### 📦 fpk 打包修复
+- 修复 `install_callback` 中 `waitress>=2.1` 引号缺失导致 pip 安装失败
+- 修复验证脚本 f-string `{",".join(failed)}` 被 bash 双引号截断
+- 修复 `sed -i ''` macOS/Linux 兼容性
+- 修复 `app.py` 路径（`app/bin/` → `app/`）
+- 修复桌面图标路径（`icon_0.png` → `icon_64.png`）
+- Chart.js 本地化（`chart.umd.min.js` 打包到 static/）
 
 ## v1.0.6 (2026-07-28)
 

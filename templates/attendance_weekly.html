@@ -36,7 +36,7 @@
                 {% for i in range(7) %}
                 {% set d = week_dates[i].isoformat() %}
                 {% set rec = s.records.get(d) %}
-                <td class="text-center" style="{% if rec and rec.status == 'present' %}background:#f6ffed{% elif rec and rec.status == 'truant' %}background:#fff1f0{% elif rec and rec.status == 'sick' %}background:#fffbe6{% elif rec and rec.status == 'personal' %}background:#e6f7ff{% elif rec and rec.status == 'late' %}background:#fff7e6{% endif %}">
+                <td class="text-center" style="{% if rec and rec.status == 'present' %}background:#f6ffed{% elif rec and rec.status == 'truant' %}background:#fff1f0{% elif rec and rec.status == 'sick' %}background:#fffbe6{% elif rec and rec.status == 'personal' %}background:rgba(0,122,255,0.08){% elif rec and rec.status == 'late' %}background:#fff7e6{% endif %}">
                     {% if rec %}
                         {% if rec.status == 'present' %}<span class="text-success">✓</span>
                         {% elif rec.status == 'truant' %}<span class="text-danger">旷{{ rec.period|popcount }}节</span>

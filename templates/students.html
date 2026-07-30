@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+/* 5列网格：每行5个卡片 */
+.col-5th { flex: 0 0 20%; max-width: 20%; }
+@media (max-width: 767px) { .col-5th { flex: 0 0 50%; max-width: 50%; } }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="page-title mb-0"><i class="fas fa-users"></i> 学生管理</h4>
     <div class="d-flex gap-2">
@@ -16,7 +21,7 @@
 <!-- 流失原因弹窗 -->
 <div class="modal fade" id="withdrawModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg">
-        <form class="modal-content" method="post" action="/students/batch-delete" id="withdrawForm">
+        <form class="modal-content" method="post" action="/students/withdraw" id="withdrawForm">
             <div class="modal-header"><h6 class="modal-title"><i class="fas fa-user-slash"></i> 填写流失原因</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body" id="withdrawModalBody">
             </div>
@@ -29,8 +34,8 @@
 </div>
 
 <!-- 统计卡片... -->
-<div class="row g-2 mb-2">
-    <div class="col-6 col-md-2">
+<div class="row g-2 mb-3">
+    <div class="col-6 col-5th">
         <a href="/students" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if not filter_type %}border-primary{% endif %}">
                 <div class="number" style="font-size:20px">{{ stats.active_count }}</div>
@@ -38,31 +43,31 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=poverty" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'poverty' %}border-danger{% endif %}">
-                <div class="number" style="font-size:20px;color:#ff4d4f">{{ stats.poverty_count }}</div>
+                <div class="number" style="font-size:20px;color:#ff3b30">{{ stats.poverty_count }}</div>
                 <div class="label" style="font-size:11px">贫困户</div>
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=boarding" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'boarding' %}border-primary{% endif %}">
-                <div class="number" style="font-size:20px;color:#1890ff">{{ stats.boarding_count }}</div>
+                <div class="number" style="font-size:20px;color:#007aff">{{ stats.boarding_count }}</div>
                 <div class="label" style="font-size:11px">住校生</div>
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=day" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'day' %}border-success{% endif %}">
-                <div class="number" style="font-size:20px;color:#52c41a">{{ stats.day_count }}</div>
+                <div class="number" style="font-size:20px;color:#34c759">{{ stats.day_count }}</div>
                 <div class="label" style="font-size:11px">通校生</div>
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=minority" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'minority' %}border-primary{% endif %}">
                 <div class="number" style="font-size:20px;color:#722ed1">{{ stats.minority_count }}</div>
@@ -70,7 +75,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=agricultural" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'agricultural' %}border-success{% endif %}">
                 <div class="number" style="font-size:20px;color:#fa8c16">{{ stats.agri_count }}</div>
@@ -78,9 +83,7 @@
             </div>
         </a>
     </div>
-</div>
-<div class="row g-2 mb-3">
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=non_agricultural" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'non_agricultural' %}border-warning{% endif %}">
                 <div class="number" style="font-size:20px;color:#eb2f96">{{ stats.non_agri_count }}</div>
@@ -88,7 +91,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=special_family" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'special_family' %}border-danger{% endif %}">
                 <div class="number" style="font-size:20px;color:#fa541c">{{ stats.special_family_count }}</div>
@@ -96,7 +99,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=special_physical" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'special_physical' %}border-info{% endif %}">
                 <div class="number" style="font-size:20px;color:#13c2c2">{{ stats.special_physical_count }}</div>
@@ -104,7 +107,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-5th">
         <a href="/students?filter=withdrawn" class="text-decoration-none">
             <div class="stat-card text-center p-2 {% if filter_type == 'withdrawn' %}border-danger{% endif %}">
                 <div class="number" style="font-size:20px;color:#8c8c8c">{{ stats.withdrawn_count }}</div>
@@ -124,7 +127,7 @@
                     {% for k, v in stats.special_family_types.items() %}
                     <div>
                         <span class="badge bg-warning text-dark" style="font-size:13px;padding:5px 12px">{{ k }}</span>
-                        <span style="font-size:12px;color:#666"> {{ v | join('、') }}</span>
+                        <span style="font-size:12px;color:#6e6e73"> {{ v | join('、') }}</span>
                     </div>
                     {% endfor %}
                 </div>
@@ -186,16 +189,16 @@
                 <small class="text-muted"><i class="fas fa-calendar-alt"></i> 年龄分布（平均{{ stats.avg_age }}岁 最大{{ stats.max_age }} 最小{{ stats.min_age }}）</small>
                 <div class="d-flex gap-2 mt-1 flex-wrap">
                     <a href="/students?filter=age_range&value=15以下" class="text-decoration-none text-center" style="flex:1;min-width:60px">
-                        <strong>{{ stats.age_ranges['15岁以下'] }}</strong><br><small style="font-size:11px;color:#666">15岁以下</small>
+                        <strong>{{ stats.age_ranges['15岁以下'] }}</strong><br><small style="font-size:11px;color:#6e6e73">15岁以下</small>
                     </a>
                     <a href="/students?filter=age_range&value=16-17" class="text-decoration-none text-center" style="flex:1;min-width:60px">
-                        <strong>{{ stats.age_ranges['16-17岁'] }}</strong><br><small style="font-size:11px;color:#666">16-17岁</small>
+                        <strong>{{ stats.age_ranges['16-17岁'] }}</strong><br><small style="font-size:11px;color:#6e6e73">16-17岁</small>
                     </a>
                     <a href="/students?filter=age_range&value=18-19" class="text-decoration-none text-center" style="flex:1;min-width:60px">
-                        <strong>{{ stats.age_ranges['18-19岁'] }}</strong><br><small style="font-size:11px;color:#666">18-19岁</small>
+                        <strong>{{ stats.age_ranges['18-19岁'] }}</strong><br><small style="font-size:11px;color:#6e6e73">18-19岁</small>
                     </a>
                     <a href="/students?filter=age_range&value=20以上" class="text-decoration-none text-center" style="flex:1;min-width:60px">
-                        <strong>{{ stats.age_ranges['20岁以上'] }}</strong><br><small style="font-size:11px;color:#666">20岁以上</small>
+                        <strong>{{ stats.age_ranges['20岁以上'] }}</strong><br><small style="font-size:11px;color:#6e6e73">20岁以上</small>
                     </a>
                 </div>
             </div>
@@ -256,60 +259,60 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">取消选择</button>
             </div>
             <form method="post" action="/students/batch-delete" id="batchForm">
-            <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table">
+            <table class="table table-hover mb-0 table-sm table-resizable table-sortable" id="students_table" style="table-layout:fixed;width:100%">
                 <thead>
                     <tr>
                         <th style="width:30px" class="hide-mobile"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
-                        <th style="width:55px">姓名</th>
-                        <th style="width:35px">性别</th>
-                        <th style="width:130px" class="hide-mobile">身份证号</th>
-                        <th style="width:90px" class="hide-mobile">监护人</th>
-                        <th style="width:60px" class="hide-mobile">关系</th>
-                        <th style="width:95px">电话</th>
-                        <th style="width:80px">就读</th>
-                        <th style="width:80px" class="hide-mobile">建档</th>
-                        <th style="width:55px" data-no-sort>宿舍</th>
-                        <th style="width:50px" class="hide-mobile">户口</th>
-                        <th style="width:50px" class="hide-mobile">民族</th>
-                        <th style="min-width:90px">住址</th>
-                        <th style="width:65px" data-no-sort>操作</th>
+                        <th style="width:60px;white-space:nowrap">姓名</th>
+                        <th style="width:30px;white-space:nowrap">性别</th>
+                        <th style="width:110px;white-space:nowrap" class="hide-mobile">身份证号</th>
+                        <th style="width:50px;white-space:nowrap" class="hide-mobile">监护人</th>
+                        <th style="width:40px;white-space:nowrap" class="hide-mobile">关系</th>
+                        <th style="width:90px;white-space:nowrap">电话</th>
+                        <th style="width:60px;white-space:nowrap">就读</th>
+                        <th style="width:50px;white-space:nowrap" class="hide-mobile">建档</th>
+                        <th style="width:50px;white-space:nowrap" data-no-sort>宿舍</th>
+                        <th style="width:40px;white-space:nowrap" class="hide-mobile">户口</th>
+                        <th style="width:35px;white-space:nowrap" class="hide-mobile">民族</th>
+                        <th style="width:auto;min-width:100px">住址</th>
+                        <th style="width:75px;white-space:nowrap" data-no-sort>操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in students %}
                     <tr>
                         <td class="hide-mobile"><input type="checkbox" name="student_ids" value="{{ s.id }}" class="student-checkbox" form="batchForm"></td>
-                        <td style="font-size:12px" data-label="姓名">{{ s.name }}</td>
-                        <td style="font-size:12px" data-label="性别">{{ s.gender }}</td>
+                        <td style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-label="姓名">{{ s.name }}</td>
+                        <td style="font-size:12px;white-space:nowrap" data-label="性别">{{ s.gender }}</td>
                         <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="身份证号">{{ s.id_card }}</td>
-                        <td style="font-size:12px" class="hide-mobile" data-label="监护人">{{ s.parent_name }}</td>
-                        <td style="font-size:12px" class="hide-mobile" data-label="关系">{{ s.parent_relation or '' }}</td>
+                        <td style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="hide-mobile" data-label="监护人">{{ s.parent_name }}</td>
+                        <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="关系">{{ s.parent_relation or '' }}</td>
                         <td style="font-size:12px;white-space:nowrap" data-label="电话">{{ s.parent_phone }}</td>
-                        <td data-label="就读">
-                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:12px;padding:1px 22px 1px 4px;width:100%" onchange="toggleDorm(this, {{ s.id }})">
+                        <td style="white-space:nowrap" data-label="就读">
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="live_mode" style="font-size:12px;padding:1px 22px 1px 4px;width:100%;max-width:58px" onchange="toggleDorm(this, {{ s.id }})">
                                 <option value="住校" {% if s.live_mode == '住校' %}selected{% endif %}>住校</option>
                                 <option value="走读" {% if s.live_mode == '走读' %}selected{% endif %}>走读</option>
                             </select>
                         </td>
-                        <td class="hide-mobile" data-label="建档">
-                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:12px;padding:1px 22px 1px 4px;width:100%">
+                        <td style="white-space:nowrap" class="hide-mobile" data-label="建档">
+                            <select class="form-select form-select-sm quick-edit" data-id="{{ s.id }}" data-field="poverty_status" style="font-size:12px;padding:1px 22px 1px 4px;width:100%;max-width:50px">
                                 <option value="否" {% if not s.poverty_status or s.poverty_status == '否' %}selected{% endif %}>否</option>
                                 <option value="贫困户" {% if s.poverty_status == '贫困户' %}selected{% endif %}>贫困</option>
                             </select>
                         </td>
-                        <td id="dorm-{{ s.id }}" data-label="宿舍">
+                        <td id="dorm-{{ s.id }}" style="white-space:nowrap" data-label="宿舍">
                             {% if s.live_mode == '住校' %}
-                            <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:12px;padding:1px 4px;width:100%">
+                            <input type="text" class="form-control form-control-sm quick-input" data-id="{{ s.id }}" data-field="dormitory" value="{{ s.dormitory or '' }}" style="font-size:12px;padding:1px 4px;width:100%;max-width:50px">
                             {% else %}
                             <span class="text-muted" style="font-size:11px">—</span>
                             {% endif %}
                         </td>
-                        <td style="font-size:12px" class="hide-mobile" data-label="户口">{{ s.residence_type or '' }}</td>
-                        <td style="font-size:12px" class="hide-mobile" data-label="民族">{{ s.ethnic or '' }}</td>
-                        <td style="white-space:pre-wrap;word-break:break-word;max-width:150px;font-size:12px" data-label="住址">{{ s.address }}</td>
+                        <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="户口">{{ s.residence_type or '' }}</td>
+                        <td style="font-size:12px;white-space:nowrap" class="hide-mobile" data-label="民族">{{ s.ethnic or '' }}</td>
+                        <td style="white-space:pre-wrap;word-break:break-word;font-size:12px" data-label="住址">{{ s.address }}</td>
                         <td style="white-space:nowrap" data-label="操作">
-                            <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑"><i class="fas fa-edit"></i></a>
-                            <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')"><i class="fas fa-trash"></i></a>
+                            <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑" style="padding:2px 6px;font-size:11px"><i class="fas fa-edit"></i></a>
+                            <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')" style="padding:2px 6px;font-size:11px"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     {% else %}
@@ -374,7 +377,7 @@ function batchWithdraw() {
         var name = cb.closest('tr').querySelector('td:nth-child(2)').textContent.trim();
         html += '<div class="mb-2 row align-items-center">' +
             '<div class="col-2"><strong>' + name + '</strong></div>' +
-            '<div class="col-10"><input type="text" name="reason_' + sid + '" class="form-control form-control-sm" placeholder="流失原因（必填）" required></div>' +
+            '<div class="col-10"><input type="text" name="reason_' + sid + '" class="form-control form-control-sm" placeholder="流失原因"></div>' +
             '</div>';
         // Pass student ID as hidden input
         html += '<input type="hidden" name="ids" value="' + sid + '">';

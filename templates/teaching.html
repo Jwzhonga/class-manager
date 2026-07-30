@@ -5,7 +5,7 @@
 <!-- ── 学生列表视图 ── -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="page-title mb-0">
-        <a href="{{ url_for('teaching') }}" class="text-decoration-none me-2" style="color:#1890ff;">
+        <a href="{{ url_for('teaching') }}" class="text-decoration-none me-2" style="color:#007aff;">
             <i class="fas fa-arrow-left"></i>
         </a>
         <i class="fas fa-chalkboard-teacher"></i> {{ subject.name }}
@@ -151,7 +151,7 @@ function showImportModal() {
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div>
-                            <h6 class="mb-1" style="color:#1a1a1a;font-weight:600;">{{ item.subject.name }}</h6>
+                            <h6 class="mb-1" style="color:#1d1d1f;font-weight:600;">{{ item.subject.name }}</h6>
                             <small class="text-muted">
                                 <i class="fas fa-user-tie"></i> {{ item.subject.teacher or '未设置教师' }}
                                 {% if item.subject.class_name %}

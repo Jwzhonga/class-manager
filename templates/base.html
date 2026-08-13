@@ -125,16 +125,16 @@
             border-radius: 6px;
             padding: 6px 12px;
             font-size: 13px;
-            color: #007aff;
+            color: var(--sd-accent);
             background: transparent;
             transition: all 0.2s ease;
         }
         .page-link:hover {
-            background: rgba(0,122,255,0.08);
-            color: #007aff;
+            background: rgba(var(--sd-accent-rgb), 0.08);
+            color: var(--sd-accent);
         }
         .page-item.active .page-link {
-            background: #007aff;
+            background: var(--sd-accent);
             color: #fff;
         }
         .page-item.disabled .page-link {
@@ -152,26 +152,26 @@
             letter-spacing: 0.01em;
         }
         .btn-primary {
-            background: #007aff;
-            border-color: #007aff;
-            color: #fff;
+            background: var(--sd-btn-bg);
+            border-color: var(--sd-btn-bg);
+            color: var(--sd-btn-text);
         }
         .btn-primary:hover {
-            background: #0066d6;
-            border-color: #0066d6;
+            background: var(--sd-btn-hover);
+            border-color: var(--sd-btn-hover);
         }
         .btn-primary:active {
-            background: #0055b3;
+            background: var(--sd-btn-active);
             transform: scale(0.97);
         }
         .btn-outline-primary {
-            color: #007aff;
-            border-color: #007aff;
+            color: var(--sd-accent);
+            border-color: var(--sd-accent);
         }
         .btn-outline-primary:hover {
-            background: #007aff;
+            background: var(--sd-accent);
             color: #fff;
-            border-color: #007aff;
+            border-color: var(--sd-accent);
         }
         .btn-outline-secondary {
             color: #6e6e73;
@@ -202,8 +202,8 @@
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .form-control:focus, .form-select:focus {
-            border-color: #007aff;
-            box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+            border-color: var(--sd-accent);
+            box-shadow: 0 0 0 3px rgba(var(--sd-accent-rgb), 0.15);
             outline: none;
         }
         .form-control::placeholder { color: #aeaeb2; }
@@ -233,6 +233,9 @@
         .badge { font-weight: 500; padding: 4px 10px; font-size: 11px; border-radius: 5px; letter-spacing: 0.02em; }
 
         /* ── Apple-Style Sidebar ── */
+        /* 主题变量体系：body 定义默认（Apple 蓝）完整色系，
+           每个 theme-* class 覆写 accent 色系 + 背景，
+           切换主题时 激活/悬停/图标/logo/主按钮 整体联动 */
         body {
             --sd-bg: rgba(245,245,247,0.92);
             --sd-border: rgba(0,0,0,0.06);
@@ -240,21 +243,93 @@
             --sd-nav-text: #515154;
             --sd-nav-icon: #86868b;
             --sd-hover-text: #007aff;
-            --sd-hover-bg: rgba(0,122,255,0.06);
+            --sd-hover-bg: rgba(0,122,255,0.08);
             --sd-active-text: #007aff;
-            --sd-active-bg: rgba(0,122,255,0.1);
+            --sd-active-bg: rgba(0,122,255,0.12);
             --sd-active-border: #007aff;
             --sd-logo-color: #1d1d1f;
             --sd-logo-icon: #007aff;
             --sd-footer-border: rgba(0,0,0,0.06);
             --sd-footer-text: #86868b;
-            --sd-sem-hover: rgba(0,122,255,0.06);
+            --sd-sem-hover: rgba(0,122,255,0.08);
+            --sd-icon-bg: rgba(0,0,0,0.05);
+            --sd-scroll-thumb: rgba(0,0,0,0.15);
+            /* accent 联动色系（激活/悬停/图标/logo/主按钮共用） */
+            --sd-accent: #007aff;
+            --sd-accent-strong: #0066d6;
+            --sd-accent-deep: #0055b3;
+            --sd-accent-rgb: 0,122,255;
+            --sd-btn-bg: #007aff;
+            --sd-btn-hover: #0066d6;
+            --sd-btn-active: #0055b3;
+            --sd-btn-text: #ffffff;
         }
-        .theme-skyblue  { --sd-bg: rgba(227,242,253,0.92); --sd-border: rgba(187,222,251,0.5); --sd-hover-bg: rgba(187,222,251,0.5); --sd-active-bg: rgba(144,202,249,0.5); --sd-sem-hover: rgba(187,222,251,0.5); }
-        .theme-mint     { --sd-bg: rgba(232,245,233,0.92); --sd-border: rgba(200,230,201,0.5); --sd-hover-bg: rgba(200,230,201,0.5); --sd-active-bg: rgba(165,214,167,0.5); --sd-sem-hover: rgba(200,230,201,0.5); }
-        .theme-cream    { --sd-bg: rgba(255,248,225,0.92); --sd-border: rgba(255,236,179,0.5); --sd-hover-bg: rgba(255,236,179,0.5); --sd-active-bg: rgba(255,224,130,0.5); --sd-sem-hover: rgba(255,236,179,0.5); }
-        .theme-lavender { --sd-bg: rgba(243,229,245,0.92); --sd-border: rgba(225,190,231,0.5); --sd-hover-bg: rgba(225,190,231,0.5); --sd-active-bg: rgba(206,147,216,0.5); --sd-sem-hover: rgba(225,190,231,0.5); }
-        .theme-gray     { --sd-bg: rgba(236,239,241,0.92); --sd-border: rgba(207,216,220,0.5); --sd-hover-bg: rgba(207,216,220,0.5); --sd-active-bg: rgba(176,190,197,0.5); --sd-sem-hover: rgba(207,216,220,0.5); }
+        /* 浅色主题：天蓝 / 薄荷 / 暖米 / 淡紫 / 静谧灰 */
+        .theme-skyblue {
+            --sd-bg: rgba(227,242,253,0.92); --sd-border: rgba(172,214,245,0.55);
+            --sd-hover-text:#0891b2; --sd-hover-bg:rgba(8,145,178,0.10);
+            --sd-active-text:#0891b2; --sd-active-bg:rgba(8,145,178,0.16); --sd-active-border:#0891b2;
+            --sd-logo-icon:#0891b2; --sd-sem-hover:rgba(8,145,178,0.10);
+            --sd-accent:#0891b2; --sd-accent-strong:#0e7490; --sd-accent-deep:#0a5d78; --sd-accent-rgb:8,145,178;
+            --sd-btn-bg:#0891b2; --sd-btn-hover:#0e7490; --sd-btn-active:#0a5d78;
+        }
+        .theme-mint {
+            --sd-bg: rgba(232,245,233,0.92); --sd-border: rgba(180,220,182,0.55);
+            --sd-hover-text:#059669; --sd-hover-bg:rgba(5,150,105,0.10);
+            --sd-active-text:#059669; --sd-active-bg:rgba(5,150,105,0.16); --sd-active-border:#059669;
+            --sd-logo-icon:#059669; --sd-sem-hover:rgba(5,150,105,0.10);
+            --sd-accent:#059669; --sd-accent-strong:#047857; --sd-accent-deep:#065f46; --sd-accent-rgb:5,150,105;
+            --sd-btn-bg:#059669; --sd-btn-hover:#047857; --sd-btn-active:#065f46;
+        }
+        .theme-cream {
+            --sd-bg: rgba(255,248,225,0.92); --sd-border: rgba(245,224,160,0.6);
+            --sd-hover-text:#d97706; --sd-hover-bg:rgba(217,119,6,0.10);
+            --sd-active-text:#d97706; --sd-active-bg:rgba(217,119,6,0.16); --sd-active-border:#d97706;
+            --sd-logo-icon:#d97706; --sd-sem-hover:rgba(217,119,6,0.10);
+            --sd-accent:#d97706; --sd-accent-strong:#b45309; --sd-accent-deep:#92400e; --sd-accent-rgb:217,119,6;
+            --sd-btn-bg:#d97706; --sd-btn-hover:#b45309; --sd-btn-active:#92400e;
+        }
+        .theme-lavender {
+            --sd-bg: rgba(243,229,245,0.92); --sd-border: rgba(214,186,224,0.55);
+            --sd-hover-text:#7c3aed; --sd-hover-bg:rgba(124,58,237,0.10);
+            --sd-active-text:#7c3aed; --sd-active-bg:rgba(124,58,237,0.16); --sd-active-border:#7c3aed;
+            --sd-logo-icon:#7c3aed; --sd-sem-hover:rgba(124,58,237,0.10);
+            --sd-accent:#7c3aed; --sd-accent-strong:#6d28d9; --sd-accent-deep:#5b21b6; --sd-accent-rgb:124,58,237;
+            --sd-btn-bg:#7c3aed; --sd-btn-hover:#6d28d9; --sd-btn-active:#5b21b6;
+        }
+        .theme-gray {
+            --sd-bg: rgba(236,239,241,0.92); --sd-border: rgba(199,208,214,0.6);
+            --sd-hover-text:#546e7a; --sd-hover-bg:rgba(84,110,122,0.10);
+            --sd-active-text:#546e7a; --sd-active-bg:rgba(84,110,122,0.16); --sd-active-border:#546e7a;
+            --sd-logo-icon:#546e7a; --sd-sem-hover:rgba(84,110,122,0.10);
+            --sd-accent:#546e7a; --sd-accent-strong:#455a64; --sd-accent-deep:#37474f; --sd-accent-rgb:84,110,122;
+            --sd-btn-bg:#546e7a; --sd-btn-hover:#455a64; --sd-btn-active:#37474f;
+        }
+        /* 深色主题：石墨黑 / 深海蓝 */
+        .theme-dark {
+            --sd-bg: rgba(28,28,30,0.95); --sd-border: rgba(255,255,255,0.08);
+            --sd-text:#f5f5f7; --sd-nav-text:#b0b0b5; --sd-nav-icon:#8e8e93;
+            --sd-hover-text:#0a84ff; --sd-hover-bg:rgba(10,132,255,0.16);
+            --sd-active-text:#0a84ff; --sd-active-bg:rgba(10,132,255,0.26); --sd-active-border:#0a84ff;
+            --sd-logo-color:#ffffff; --sd-logo-icon:#0a84ff;
+            --sd-footer-border: rgba(255,255,255,0.08); --sd-footer-text:#98989d;
+            --sd-sem-hover:rgba(10,132,255,0.16);
+            --sd-icon-bg: rgba(255,255,255,0.10); --sd-scroll-thumb: rgba(255,255,255,0.18);
+            --sd-accent:#0a84ff; --sd-accent-strong:#409cff; --sd-accent-deep:#0066d6; --sd-accent-rgb:10,132,255;
+            --sd-btn-bg:#0a84ff; --sd-btn-hover:#409cff; --sd-btn-active:#0066d6;
+        }
+        .theme-navy {
+            --sd-bg: rgba(14,27,46,0.96); --sd-border: rgba(120,160,220,0.18);
+            --sd-text:#eaf2fc; --sd-nav-text:#a7c0dd; --sd-nav-icon:#7e9bc0;
+            --sd-hover-text:#5ac8fa; --sd-hover-bg:rgba(90,200,250,0.16);
+            --sd-active-text:#5ac8fa; --sd-active-bg:rgba(90,200,250,0.26); --sd-active-border:#5ac8fa;
+            --sd-logo-color:#ffffff; --sd-logo-icon:#5ac8fa;
+            --sd-footer-border: rgba(120,160,220,0.18); --sd-footer-text:#86a2c4;
+            --sd-sem-hover:rgba(90,200,250,0.16);
+            --sd-icon-bg: rgba(90,200,250,0.14); --sd-scroll-thumb: rgba(255,255,255,0.18);
+            --sd-accent:#5ac8fa; --sd-accent-strong:#7cd6ff; --sd-accent-deep:#2e9ad6; --sd-accent-rgb:90,200,250;
+            --sd-btn-bg:#2e9ad6; --sd-btn-hover:#1f80b8; --sd-btn-active:#186a9a;
+        }
 
         .sidebar {
             background: var(--sd-bg);
@@ -265,54 +340,110 @@
             width: 220px; height: 100vh;
             color: var(--sd-text); z-index: 100;
             overflow-y: auto;
-            transition: background 0.3s ease;
+            transition: background 0.3s ease, border-color 0.3s ease;
+            scrollbar-width: thin;
+            scrollbar-color: var(--sd-scroll-thumb) transparent;
         }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--sd-scroll-thumb); border-radius: 3px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: var(--sd-accent); }
+
+        /* ── Logo 区：图标做 accent 渐变圆底瓷块 ── */
         .sidebar .logo {
-            padding: 24px 20px 20px;
+            display: flex; align-items: center;
+            padding: 22px 20px 18px;
             font-size: 17px; font-weight: 700;
             letter-spacing: -0.02em;
             color: var(--sd-logo-color);
             border-bottom: 1px solid var(--sd-border);
+            transition: color 0.3s ease;
         }
         .sidebar .logo i {
-            color: var(--sd-logo-icon);
-            margin-right: 8px;
-            font-size: 20px;
+            color: var(--sd-btn-text);
+            background: linear-gradient(135deg, var(--sd-accent), var(--sd-accent-strong));
+            width: 36px; height: 36px; line-height: 36px;
+            text-align: center; border-radius: 10px;
+            font-size: 18px; margin-right: 10px;
+            box-shadow: 0 2px 8px rgba(var(--sd-accent-rgb), 0.35);
+            flex-shrink: 0;
+            transition: background 0.3s ease;
         }
+
+        /* ── 导航项：圆角胶囊 + 左侧指示条 + 图标圆底容器 ── */
         .sidebar .nav-link {
+            position: relative;
             color: var(--sd-nav-text);
-            padding: 10px 20px;
+            margin: 2px 10px;
+            padding: 8px 12px;
             font-size: 13px;
             font-weight: 500;
-            border-radius: 0;
-            transition: all 0.2s ease;
-            border-left: 3px solid transparent;
+            border-radius: 10px;
+            border-left: none;
+            transition: color 0.2s ease, background-color 0.2s ease;
+        }
+        .sidebar .nav-link::before {
+            content: "";
+            position: absolute; left: -1px; top: 50%;
+            width: 3px; height: 18px; border-radius: 3px;
+            background: var(--sd-accent);
+            transform: translateY(-50%) scaleY(0);
+            transition: transform 0.2s ease;
         }
         .sidebar .nav-link:hover {
             color: var(--sd-hover-text);
             background: var(--sd-hover-bg);
-            border-left-color: var(--sd-active-border);
         }
+        .sidebar .nav-link:hover::before { transform: translateY(-50%) scaleY(1); }
         .sidebar .nav-link.active {
             color: var(--sd-active-text);
             background: var(--sd-active-bg);
-            border-left-color: var(--sd-active-border);
             font-weight: 600;
         }
-        .sidebar .nav-link i { width: 20px; text-align: center; margin-right: 10px; color: var(--sd-nav-icon); font-size: 14px; }
-        .sidebar .nav-link:hover i,
-        .sidebar .nav-link.active i { color: var(--sd-active-text); }
-        .sidebar .sub-nav .nav-link {
-            padding: 7px 16px 7px 44px;
-            font-size: 12px;
-            border-left: none;
+        .sidebar .nav-link.active::before { transform: translateY(-50%) scaleY(1); }
+        /* 图标统一圆底容器 */
+        .sidebar .nav-link > i:first-child {
+            width: 28px; height: 28px; line-height: 28px;
+            border-radius: 8px; text-align: center;
+            margin-right: 10px; font-size: 13px;
+            color: var(--sd-nav-icon);
+            background: var(--sd-icon-bg);
+            transition: color 0.2s ease, background-color 0.2s ease;
+            flex-shrink: 0;
         }
+        .sidebar .nav-link:hover > i:first-child { color: var(--sd-hover-text); background: var(--sd-hover-bg); }
+        .sidebar .nav-link.active > i:first-child { color: var(--sd-active-text); background: var(--sd-active-bg); }
+
+        /* 子菜单：取消图标圆底，弱化缩进 */
+        .sidebar .sub-nav .nav-link {
+            padding: 6px 12px 6px 40px;
+            font-size: 12px;
+            border-radius: 8px;
+            margin: 1px 10px;
+        }
+        .sidebar .sub-nav .nav-link::before { content: none; }
+        .sidebar .sub-nav .nav-link > i:first-child {
+            width: 20px; height: auto; line-height: inherit;
+            background: transparent; font-size: 11px; margin-right: 8px;
+        }
+        .sidebar .sub-nav .nav-link:hover > i:first-child,
+        .sidebar .sub-nav .nav-link.active > i:first-child { background: transparent; }
         .sidebar .sub-nav .nav-link:hover,
         .sidebar .sub-nav .nav-link.active {
-            border-left: none;
             background: var(--sd-hover-bg);
+            color: var(--sd-hover-text);
         }
-        .sidebar hr { border-color: var(--sd-border); margin: 6px 20px; opacity: 0.5; }
+        /* 学期切换开关：不套图标圆底 / 无指示条 */
+        .sidebar .sem-section .nav-link { margin: 0; }
+        .sidebar .sem-section .nav-link::before { content: none; }
+        .sidebar .sem-section .nav-link:hover,
+        .sidebar .sem-section .nav-link.active { background: transparent; }
+        .sidebar .sem-section .nav-link > i:first-child {
+            width: auto; height: auto; line-height: inherit;
+            background: transparent; border-radius: 0;
+            margin-right: 8px; font-size: 12px;
+        }
+        .sidebar hr { border-color: var(--sd-border); margin: 10px 20px; opacity: 0.6; }
 
         /* 学期管理区域 */
         .sidebar .sem-section a { color: var(--sd-nav-text); }
@@ -322,55 +453,59 @@
             background: transparent;
             color: var(--sd-nav-text);
             border: none;
-            border-radius: 4px;
-            padding: 3px 8px;
+            border-radius: 8px;
+            padding: 5px 10px;
             text-align: left;
             width: 100%;
+            transition: all 0.2s ease;
         }
         .sidebar .sem-btn:hover,
         .sidebar .sem-btn.active {
             background: var(--sd-sem-hover);
             color: var(--sd-hover-text);
         }
+        .sidebar .sem-btn.active { color: var(--sd-active-text); font-weight: 600; }
         .sidebar .sidebar-footer {
             border-top: 1px solid var(--sd-footer-border);
-            padding: 12px 20px;
+            padding: 14px 20px 16px;
         }
         .sidebar .sidebar-footer .text-muted { color: var(--sd-footer-text) !important; font-size: 11px; }
         .sidebar .sidebar-footer .logout-link {
             color: var(--sd-footer-text);
             font-size: 12px;
             text-decoration: none;
+            transition: color 0.2s ease;
         }
         .sidebar .sidebar-footer .logout-link:hover {
             color: #ff3b30;
         }
         /* ── 主题选择器 ── */
         .theme-picker {
-            padding: 10px 16px;
+            padding: 12px 16px 14px;
             border-top: 1px solid var(--sd-border);
         }
         .theme-picker .picker-label {
             font-size: 11px;
             color: var(--sd-footer-text);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
         .theme-picker .theme-dot {
             display: inline-block;
             width: 22px; height: 22px;
             border-radius: 50%;
             cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.2s;
-            margin-right: 6px;
+            border: 2px solid var(--sd-border);
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+            margin-right: 7px;
             vertical-align: middle;
         }
         .theme-picker .theme-dot:hover {
-            transform: scale(1.15);
+            transform: scale(1.18);
         }
         .theme-picker .theme-dot.active {
-            border-color: #007aff;
-            box-shadow: 0 0 0 2px rgba(0,122,255,0.2);
+            border-color: var(--sd-accent);
+            box-shadow: 0 0 0 2px rgba(var(--sd-accent-rgb), 0.25);
         }
 
         /* ── 主内容区 ── */
@@ -510,14 +645,15 @@
             }
         }
 
-        /* ── Offcanvas 移动菜单 (Apple Style) ── */
+        /* ── Offcanvas 移动菜单 (Apple Style, 跟随主题变量) ── */
         .offcanvas {
-            background: rgba(255,255,255,0.96);
+            background: var(--sd-bg);
             backdrop-filter: blur(40px);
             -webkit-backdrop-filter: blur(40px);
+            color: var(--sd-text);
         }
         .offcanvas .nav-link {
-            color: #1d1d1f;
+            color: var(--sd-nav-text);
             padding: 10px 20px;
             font-size: 14px;
             font-weight: 500;
@@ -526,27 +662,27 @@
         }
         .offcanvas .nav-link:hover,
         .offcanvas .nav-link.active {
-            color: #007aff;
-            background: rgba(0,122,255,0.06);
-            border-left-color: #007aff;
+            color: var(--sd-active-text);
+            background: var(--sd-active-bg);
+            border-left-color: var(--sd-active-border);
         }
-        .offcanvas .nav-link i { width: 22px; color: #86868b; margin-right: 10px; text-align: center; }
+        .offcanvas .nav-link i { width: 22px; color: var(--sd-nav-icon); margin-right: 10px; text-align: center; }
         .offcanvas .nav-link:hover i,
-        .offcanvas .nav-link.active i { color: #007aff; }
+        .offcanvas .nav-link.active i { color: var(--sd-active-text); }
         .offcanvas .sub-nav .nav-link {
             padding-left: 52px;
             font-size: 13px;
             border-left: none;
         }
         .offcanvas .sub-nav .nav-link:hover { border-left: none; }
-        .offcanvas hr { margin: 4px 20px; border-color: rgba(0,0,0,0.06); opacity: 0.5; }
+        .offcanvas hr { margin: 4px 20px; border-color: var(--sd-border); opacity: 0.6; }
         .offcanvas .sem-btn-mobile {
             display: block;
             width: 100%;
             text-align: left;
-            padding: 6px 20px 6px 52px;
+            padding: 7px 20px 7px 52px;
             font-size: 13px;
-            color: #515154;
+            color: var(--sd-nav-text);
             background: none;
             border: none;
             border-radius: 0;
@@ -554,23 +690,24 @@
         }
         .offcanvas .sem-btn-mobile:hover,
         .offcanvas .sem-btn-mobile.active {
-            background: rgba(0,122,255,0.06);
-            color: #007aff;
+            background: var(--sd-sem-hover);
+            color: var(--sd-active-text);
         }
         .offcanvas .theme-dot-mb {
             display: inline-block;
             width: 28px; height: 28px;
             border-radius: 50%;
             cursor: pointer;
-            border: 2px solid transparent;
+            border: 2px solid var(--sd-border);
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04);
             transition: all 0.2s;
             margin-right: 8px;
             vertical-align: middle;
         }
         .offcanvas .theme-dot-mb:hover { transform: scale(1.15); }
         .offcanvas .theme-dot-mb.active {
-            border-color: #007aff;
-            box-shadow: 0 0 0 2px rgba(0,122,255,0.2);
+            border-color: var(--sd-accent);
+            box-shadow: 0 0 0 2px rgba(var(--sd-accent-rgb), 0.25);
         }
 
         /* ── 表格横向滚动提示 ── */
@@ -589,6 +726,7 @@
     </style>
 </head>
 <body>
+<script>/* 主题防闪烁：渲染前即挂载已保存主题 class */try{var _t=localStorage.getItem('sidebar_theme');if(_t&&_t!=='default'){document.body.classList.add('theme-'+_t);}}catch(e){}</script>
 
 <div class="container-fluid p-0">
 <div class="d-flex position-relative">
@@ -608,6 +746,7 @@
                     </ul>
                 </div>
             </li>
+            <li class="nav-item"><a class="nav-link {% if '/communication' in request.path %}active{% endif %}" href="/communication"><i class="fas fa-comments"></i> 沟通记录</a></li>
             <li class="nav-item"><a class="nav-link {% if '/attendance' in request.path and '/weekly' not in request.path and '/stats' not in request.path %}active{% endif %}" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
             <li class="nav-item"><a class="nav-link {% if '/attendance/weekly' in request.path %}active{% endif %}" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
             <li class="nav-item">
@@ -629,7 +768,15 @@
                     </ul>
                 </div>
             </li>
-            <li class="nav-item"><a class="nav-link {% if '/schedule' in request.path %}active{% endif %}" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#scheduleSub"><i class="fas fa-table"></i> 课表管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav {% if '/schedule' in request.path %}show{% endif %}" id="scheduleSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-calendar-alt"></i> 班级课表</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/schedule/teachers"><i class="fas fa-chalkboard-teacher"></i> 教师课表</a></li>
+                    </ul>
+                </div>
+            </li>
             <li class="nav-item"><hr></li>
             <li class="nav-item"><a class="nav-link {% if '/fund' in request.path %}active{% endif %}" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
             <li class="nav-item"><a class="nav-link {% if '/data' in request.path %}active{% endif %}" href="/data"><i class="fas fa-database"></i> 数据管理</a></li>
@@ -673,6 +820,8 @@
                 <span class="theme-dot" data-theme="cream"    style="background:#fff8e1" title="暖米色"></span>
                 <span class="theme-dot" data-theme="lavender" style="background:#f3e5f5" title="淡紫色"></span>
                 <span class="theme-dot" data-theme="gray"     style="background:#eceff1" title="静谧灰"></span>
+                <span class="theme-dot" data-theme="dark"     style="background:#1c1c1e" title="石墨黑"></span>
+                <span class="theme-dot" data-theme="navy"     style="background:#0e1b2e" title="深海蓝"></span>
             </div>
         </div>
 
@@ -685,8 +834,8 @@
     <!-- ========== 移动端顶部栏 ========== -->
     <div id="mobileHeader" class="d-md-none position-fixed top-0 start-0 end-0" style="z-index:99;background:rgba(255,255,255,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);padding:12px 16px;">
         <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0" style="font-size:17px;font-weight:700;letter-spacing:-0.02em"><i class="fas fa-graduation-cap" style="color:#007aff;margin-right:8px"></i> 班级管理</h5>
-            <button class="btn btn-sm" style="background:rgba(0,122,255,0.08);color:#007aff;border:none" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+            <h5 class="mb-0" style="font-size:17px;font-weight:700;letter-spacing:-0.02em"><i class="fas fa-graduation-cap" style="color:var(--sd-accent);margin-right:8px"></i> 班级管理</h5>
+            <button class="btn btn-sm" style="background:rgba(var(--sd-accent-rgb),0.10);color:var(--sd-accent);border:none" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
                 <i class="fas fa-bars"></i>
             </button>
         </div>
@@ -773,8 +922,8 @@
 
 <!-- ========== 移动端 Offcanvas 菜单（完整版） ========== -->
 <div class="offcanvas offcanvas-start" id="mobileMenu">
-    <div class="offcanvas-header" style="border-bottom:1px solid rgba(0,0,0,0.06);padding:16px 20px">
-        <h5 style="font-size:17px;font-weight:700;letter-spacing:-0.02em;margin:0"><i class="fas fa-graduation-cap" style="color:#007aff;margin-right:8px"></i> 班级管理</h5>
+    <div class="offcanvas-header" style="border-bottom:1px solid var(--sd-border);padding:16px 20px">
+        <h5 style="font-size:17px;font-weight:700;letter-spacing:-0.02em;margin:0"><i class="fas fa-graduation-cap" style="color:var(--sd-accent);margin-right:8px"></i> 班级管理</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
     <div class="offcanvas-body p-0">
@@ -790,6 +939,7 @@
                     </ul>
                 </div>
             </li>
+            <li class="nav-item"><a class="nav-link {% if '/communication' in request.path %}active{% endif %}" href="/communication"><i class="fas fa-comments"></i> 沟通记录</a></li>
             <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-calendar-check"></i> 每日考勤</a></li>
             <li class="nav-item"><a class="nav-link" href="/attendance/weekly"><i class="fas fa-calendar-week"></i> 考勤周视图</a></li>
             <li class="nav-item">
@@ -811,7 +961,15 @@
                     </ul>
                 </div>
             </li>
-            <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-table"></i> 班级课表</a></li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="collapse" data-bs-target="#m_scheduleSub"><i class="fas fa-table"></i> 课表管理 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:5px"></i></a>
+                <div class="collapse sub-nav {% if '/schedule' in request.path %}show{% endif %}" id="m_scheduleSub">
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/schedule"><i class="fas fa-calendar-alt"></i> 班级课表</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/schedule/teachers"><i class="fas fa-chalkboard-teacher"></i> 教师课表</a></li>
+                    </ul>
+                </div>
+            </li>
             <li class="nav-item"><hr></li>
             <li class="nav-item"><a class="nav-link" href="/fund"><i class="fas fa-coins"></i> 班费管理</a></li>
             <li class="nav-item"><a class="nav-link" href="/data"><i class="fas fa-database"></i> 数据管理</a></li>
@@ -820,7 +978,7 @@
 
         <!-- 学期管理 -->
         <div class="px-3 py-2">
-            <a class="d-block" href="#" data-bs-toggle="collapse" data-bs-target="#m_semSub" style="color:#1d1d1f;font-size:13px;padding:6px 0;text-decoration:none">
+            <a class="d-block" href="#" data-bs-toggle="collapse" data-bs-target="#m_semSub" style="color:var(--sd-text);font-size:13px;padding:6px 0;text-decoration:none">
                 <i class="fas fa-calendar-alt" style="color:var(--sd-logo-icon);width:20px"></i> 学期管理
                 <i class="fas fa-chevron-down" style="font-size:10px;float:right;margin-top:4px"></i>
             </a>
@@ -840,8 +998,8 @@
         </div>
 
         <!-- 移动端主题选择器 -->
-        <div class="px-3 py-2 border-top">
-            <div style="font-size:11px;color:#86868b;margin-bottom:6px"><i class="fas fa-palette"></i> 主题颜色</div>
+        <div class="px-3 py-2 border-top" style="border-top-color:var(--sd-border)">
+            <div style="font-size:11px;color:var(--sd-footer-text);margin-bottom:6px"><i class="fas fa-palette"></i> 主题颜色</div>
             <div>
                 <span class="theme-dot-mb active" data-theme="default"  style="background:#f5f5f7" title="默认"></span>
                 <span class="theme-dot-mb" data-theme="skyblue"  style="background:#e3f2fd" title="天空蓝"></span>
@@ -849,11 +1007,13 @@
                 <span class="theme-dot-mb" data-theme="cream"    style="background:#fff8e1" title="暖米色"></span>
                 <span class="theme-dot-mb" data-theme="lavender" style="background:#f3e5f5" title="淡紫色"></span>
                 <span class="theme-dot-mb" data-theme="gray"     style="background:#eceff1" title="静谧灰"></span>
+                <span class="theme-dot-mb" data-theme="dark"     style="background:#1c1c1e" title="石墨黑"></span>
+                <span class="theme-dot-mb" data-theme="navy"     style="background:#0e1b2e" title="深海蓝"></span>
             </div>
         </div>
 
-        <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center">
-            <small class="text-muted">{{ session.get('username','') }}</small>
+        <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center" style="border-top-color:var(--sd-border)">
+            <small style="color:var(--sd-footer-text)">{{ session.get('username','') }}</small>
             <a href="/logout" class="btn btn-sm btn-outline-danger"><i class="fas fa-sign-out-alt"></i> 退出</a>
         </div>
     </div>
@@ -878,13 +1038,14 @@ function confirmDelSemester(id) {
 }
 /* ── 主题切换 ── */
 (function() {
+    var THEMES = ['default','skyblue','mint','cream','lavender','gray','dark','navy'];
     var allDots = document.querySelectorAll('.theme-dot, .theme-dot-mb');
     function setTheme(name) {
-        // 从 body 移除所有主题 class
-        document.body.classList.remove('theme-skyblue', 'theme-mint', 'theme-cream', 'theme-lavender', 'theme-gray');
-        if (name && name !== 'default') {
-            document.body.classList.add('theme-' + name);
-        }
+        if (!name || THEMES.indexOf(name) === -1) name = 'default';
+        // 按主题清单切换 body 上的 theme-* class（default 不挂 class）
+        THEMES.forEach(function(t) {
+            document.body.classList.toggle('theme-' + t, t !== 'default' && t === name);
+        });
         // 更新所有色块的选中状态
         allDots.forEach(function(d) { d.classList.remove('active'); });
         document.querySelectorAll('.theme-dot[data-theme="' + name + '"], .theme-dot-mb[data-theme="' + name + '"]').forEach(function(d) {

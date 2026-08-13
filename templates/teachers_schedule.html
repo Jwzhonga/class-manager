@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title">
+    <i class="fas fa-chalkboard-teacher"></i> 教师课表
+    <small class="ms-2" style="font-weight:400;color:#6e6e73">与班级课表同格式，xlsx 上传解析</small>
+</h4>
+
+<style>
+    .ts-teacher-btn {
+        display:flex; align-items:center; justify-content:space-between; gap:8px;
+        padding:9px 14px; border-radius:10px; background:#fff;
+        border:1px solid rgba(0,0,0,0.06); box-shadow:0 1px 3px rgba(0,0,0,0.04);
+        color:#1d1d1f; font-size:13.5px; font-weight:500; text-decoration:none;
+        transition:all .15s ease; margin-bottom:6px;
+    }
+    .ts-teacher-btn:hover { border-color:#007aff; color:#007aff; }
+    .ts-teacher-btn.active { background:#007aff; border-color:#007aff; color:#fff; }
+    .ts-teacher-btn .ts-del {
+        border:none; background:transparent; color:inherit; opacity:.5; font-size:12px;
+    }
+    .ts-teacher-btn .ts-del:hover { opacity:1; color:#ff3b30; }
+    .schedule-grid td { padding:6px 8px !important; min-height:52px; vertical-align:top; }
+    .schedule-grid .drag-item {
+        border-radius:8px; padding:4px 8px; font-size:12.5px; font-weight:500; line-height:1.35;
+    }
+    .schedule-grid .drag-item small { font-weight:400; opacity:.75; }
+</style>
+
+<div class="row g-3">
+    <!-- 上传区 + 教师列表 -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header"><i class="fas fa-upload text-primary"></i> 上传教师课表</div>
+            <div class="card-body">
+                <form method="post" action="/schedule/teachers/add" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">教师姓名</label>
+                        <input type="text" name="teacher_name" class="form-control form-control-sm" placeholder="如：张老师" required maxlength="64">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">课表文件 <small class="text-muted">（xlsx 同班级课表格式，也支持图片）</small></label>
+                        <input type="file" name="teacher_image" class="form-control form-control-sm" accept=".xls,.xlsx,image/*" required>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-upload"></i> 上传解析</button>
+                </form>
+                <div class="mt-2 small text-muted">
+                    <i class="fas fa-info-circle"></i> xlsx 格式与班级课表一致：第1列节次（如"上午1"），第2-6列星期一~星期五，单元格"课程名&#10;教师名"
+                </div>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header">教师列表（{{ records|length }}）</div>
+            <div class="card-body p-2">
+                {% for r in records %}
+                <a class="ts-teacher-btn {% if selected and selected.id == r.id %}active{% endif %}" href="/schedule/teachers?id={{ r.id }}">
+                    <span><i class="fas fa-chalkboard-teacher"></i> {{ r.teacher_name }}</span>
+                    <form method="post" action="/schedule/teachers/{{ r.id }}/delete" class="d-inline m-0" onsubmit="return confirm('确认删除教师「{{ r.teacher_name }}」的课表？')">
+                        <button type="submit" class="ts-del" title="删除"><i class="fas fa-trash"></i></button>
+                    </form>
+                </a>
+                {% else %}
+                <div class="text-center text-muted py-3 small">暂无教师课表</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 课表网格（与班级课表一致） -->
+    <div class="col-md-9">
+        {% if selected %}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chalkboard-teacher text-primary"></i> {{ selected.teacher_name }} 的课表</span>
+                {% if selected.image_path %}
+                <a href="/static/{{ selected.image_path }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-image"></i> 课表图片</a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0 schedule-grid">
+                        <thead>
+                            <tr>
+                                <th style="width:70px">节次</th>
+                                {% for d in range(5) %}
+                                <th>{{ day_names[d] }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in range(1, max_period + 1) %}
+                            <tr>
+                                <td class="text-center">
+                                    <small>第{{ p }}节</small>
+                                    {% if period_times and p in period_times %}
+                                    <br><small class="text-muted">{{ period_times[p] }}</small>
+                                    {% endif %}
+                                </td>
+                                {% for d in range(5) %}
+                                {% set day_courses = week[d].get(p, []) %}
+                                <td style="{% if day_courses %}background:{{ course_color.get(day_courses[0].course_name, '#fff') }}{% endif %}">
+                                    {% for s in day_courses %}
+                                    <div class="drag-item">
+                                        {{ s.course_name }}
+                                        {% if s.teacher %}<br><small>{{ s.teacher }}</small>{% endif %}
+                                        {% if s.location %}<br><small class="text-muted">{{ s.location }}</small>{% endif %}
+                                        {% if s.is_training %}<br><span class="badge bg-info">实训</span>{% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-chalkboard-teacher" style="font-size:44px;opacity:.3"></i>
+            <p class="mt-2 mb-0">暂无教师课表，请先在左侧上传 xlsx 课表文件</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

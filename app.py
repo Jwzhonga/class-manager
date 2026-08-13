@@ -32,7 +32,6 @@ import hashlib
 
 # ── App配置 ──
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 import os
 # 数据库路径：fnOS 上使用 TRIM_PKGVAR（持久化数据目录），否则用默认 instance/
 trim_pkgvar = os.environ.get('TRIM_PKGVAR', '')
@@ -56,6 +55,26 @@ if _trim_pkgvar:
     USER_DB_DIR = os.path.join(_trim_pkgvar, 'users')
 else:
     USER_DB_DIR = os.path.join(BASE_DIR, 'instance', 'users')
+
+# ── secret_key 持久化：重启后会话保持（fnOS 存 TRIM_PKGVAR，本地存 instance/）──
+_secret_dir = _trim_pkgvar if _trim_pkgvar else os.path.join(BASE_DIR, 'instance')
+try:
+    os.makedirs(_secret_dir, exist_ok=True)
+    _secret_key = os.environ.get('SECRET_KEY', '')
+    if not _secret_key:
+        _secret_file = os.path.join(_secret_dir, 'secret_key')
+        try:
+            _secret_key = open(_secret_file).read().strip()
+        except Exception:
+            _secret_key = os.urandom(24).hex()
+            try:
+                with open(_secret_file, 'w') as f:
+                    f.write(_secret_key)
+            except Exception:
+                pass
+    app.secret_key = _secret_key
+except Exception:
+    app.secret_key = os.urandom(24).hex()
 
 # gzip 压缩（跳过文件下载）
 @app.after_request
@@ -100,6 +119,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
 ALLOWED_EXCEL_EXTENSIONS = {'xls', 'xlsx'}
 ALLOWED_SCHEDULE_IMAGE_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | {'heic', 'heif'}
+# 沟通记录附件白名单：图片 + 录音/音频 + 常见文档
+ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'm4a', 'ogg', 'amr', 'aac', 'webm'}
+ALLOWED_COMM_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_AUDIO_EXTENSIONS | {'pdf', 'doc', 'docx', 'xls', 'xlsx'}
 
 def _safe_upload_ext(filename, allowed, default=''):
     """Return a trusted lowercase extension from an uploaded filename.
@@ -645,6 +667,18 @@ class ScheduleImage(db.Model):
     image_path = db.Column(db.String(256), nullable=False)
     raw_text = db.Column(db.Text, default='')
     ocr_result = db.Column(db.Text, default='')  # JSON string
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class TeacherSchedule(db.Model):
+    """教师课表：按教师上传同格式xlsx解析为课表（与班级课表结构一致），也可附图片存档"""
+    __tablename__ = 'teacher_schedule'
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_name = db.Column(db.String(64), default='')   # 教师姓名
+    image_path = db.Column(db.String(256), default='')    # 课表图片（可选）uploads/xxx
+    courses_json = db.Column(db.Text, default='[]')       # 解析后的课程 JSON [{day_of_week, period, course_name, teacher, location, is_training}]
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
@@ -668,6 +702,44 @@ class SeatAssignment(db.Model):
 
     seat = db.relationship('Seat', backref=db.backref('assignments', lazy='dynamic'))
     student = db.relationship('Student', backref=db.backref('seat_assignments', lazy='dynamic'))
+
+
+class CommunicationRecord(db.Model):
+    """沟通记录：家访 / 家校沟通 / 学生谈话（附件支持图片、录音、文档）"""
+    __tablename__ = 'communication_record'
+    id = db.Column(db.Integer, primary_key=True)
+    comm_type = db.Column(db.String(16), nullable=False, default='visit')  # visit家访 / home_school家校沟通 / talk学生谈话
+    student_id = db.Column(db.Integer, db.ForeignKey('student.id'), nullable=True)  # 可空：集体沟通不指定学生
+    title = db.Column(db.String(128), default='')      # 沟通主题
+    content = db.Column(db.Text, default='')           # 沟通详情（家访=备注）
+    comm_date = db.Column(db.Date, nullable=False, default=date.today)  # 沟通日期（家访=家访时间）
+    location = db.Column(db.String(128), default='')   # 地点/方式（家访=家庭住址）
+    attachments = db.Column(db.Text, default='')       # JSON数组：[{name, path, kind}]
+    semester_id = db.Column(db.Integer, db.ForeignKey('semester.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    # ── 家访专属字段（仅 comm_type='visit' 使用，对应"家访信息收集表"模板）──
+    visit_form = db.Column(db.String(32), default='')           # 家访形式：入户/电话/网络
+    visit_companion = db.Column(db.String(64), default='')      # 家访陪同人员
+    visit_category = db.Column(db.String(64), default='')       # 类型：留守儿童/经济困难/学业问题/心理困境等
+    visit_summary = db.Column(db.String(200), default='')       # 学生情况（客观陈述，统计表用）
+    visit_family_members = db.Column(db.Text, default='')       # JSON: [{relation,name,age,occupation,love}]
+    visit_parent_relation = db.Column(db.String(32), default='')  # 父母关系
+    visit_atmosphere = db.Column(db.String(32), default='')     # 家庭气氛
+    visit_living_together = db.Column(db.String(8), default='')   # 是否和父母生活：是/否
+    visit_generation_foster = db.Column(db.String(8), default='')  # 是否隔代抚养：是/否
+    visit_physiology = db.Column(db.Text, default='')           # 疾病史-生理方面
+    visit_psychology = db.Column(db.Text, default='')           # 疾病史-心理方面
+    visit_study_attitude = db.Column(db.Text, default='')       # 学习态度
+    visit_study_habit = db.Column(db.Text, default='')          # 学习习惯
+    visit_academic_level = db.Column(db.Text, default='')       # 近期学业水平
+    visit_strengths = db.Column(db.Text, default='')            # 优点评估
+    visit_problems = db.Column(db.Text, default='')             # 问题评估
+    visit_parenting_style = db.Column(db.Text, default='')      # 家长的教育方式
+    visit_parent_needs = db.Column(db.Text, default='')         # 家长的需求和建议
+    visit_teacher_advice = db.Column(db.Text, default='')       # 教师对家长的建议
+
+    student = db.relationship('Student', backref=db.backref('communication_records', lazy='dynamic'))
 
 
 # 创建所有表（初始化为主数据库 - master.db）
@@ -898,8 +970,9 @@ def register():
         switch_to_user_db(user.id)
         # 创建默认学期
         from datetime import date
-        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025, 9, 1),
-                     end_date=date(2026, 1, 15), is_current=True)
+        now_year = date.today().year
+        s = Semester(name=f'{now_year}-{now_year+1}学年度第1学期', start_date=date(now_year, 9, 1),
+                     end_date=date(now_year+1, 1, 15), is_current=True)
         db.session.add(s)
         db.session.commit()
         session['semester_id'] = s.id
@@ -996,6 +1069,9 @@ def student_batch_delete():
                 Discipline.query.filter_by(student_id=s.id).delete()
                 ViolationRecord.query.filter_by(student_id=s.id).delete()
                 SeatAssignment.query.filter_by(student_id=s.id).delete()
+                for cr in CommunicationRecord.query.filter_by(student_id=s.id).all():
+                    communication_delete_files(cr.attachments)
+                CommunicationRecord.query.filter_by(student_id=s.id).delete()
                 try:
                     db.session.execute(db.text('DELETE FROM training_group_student WHERE student_id = :sid'), {'sid': s.id})
                 except Exception:
@@ -1047,6 +1123,46 @@ def semester_rename(id):
 def semester_delete(id):
     sem = db.get_or_404(Semester, id)
     name = sem.name
+    # 删除物理文件（处分图/考勤图/班费凭据/课表图/沟通附件）
+    for d in Discipline.query.filter_by(semester_id=id).all():
+        for key in ('image_notification', 'image_letter'):
+            try:
+                for p in json.loads(getattr(d, key) or '[]'):
+                    fp = os.path.join(BASE_DIR, 'static', p)
+                    if os.path.exists(fp):
+                        os.remove(fp)
+            except Exception:
+                pass
+    for a in Attendance.query.filter_by(semester_id=id).all():
+        if a.image_path:
+            try:
+                fp = os.path.join(BASE_DIR, 'static', a.image_path)
+                if os.path.exists(fp):
+                    os.remove(fp)
+            except Exception:
+                pass
+    for f in ClassFund.query.filter_by(semester_id=id).all():
+        if f.voucher:
+            try:
+                fp = os.path.join(UPLOAD_FOLDER, f.voucher)
+                if os.path.exists(fp):
+                    os.remove(fp)
+            except Exception:
+                pass
+    for si in ScheduleImage.query.filter_by(semester_id=id).all():
+        try:
+            fp = os.path.join(BASE_DIR, 'static', si.image_path)
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
+    for ts in TeacherSchedule.query.filter_by(semester_id=id).all():
+        try:
+            fp = os.path.join(BASE_DIR, 'static', ts.image_path)
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
     # 删除关联数据
     Attendance.query.filter_by(semester_id=id).delete()
     Discipline.query.filter_by(semester_id=id).delete()
@@ -1061,6 +1177,15 @@ def semester_delete(id):
     SeatAssignment.query.filter_by(semester_id=id).delete()
     Seat.query.filter_by(semester_id=id).delete()
     Schedule.query.filter_by(semester_id=id).delete()
+    ScheduleImage.query.filter_by(semester_id=id).delete()
+    TeacherSchedule.query.filter_by(semester_id=id).delete()
+    # 沟通记录：先删附件文件再删记录
+    for cr in CommunicationRecord.query.filter_by(semester_id=id).all():
+        communication_delete_files(cr.attachments)
+    CommunicationRecord.query.filter_by(semester_id=id).delete()
+    # P1-2：补删孤儿 Student 与 TeachingGrade（先删其外键依赖）
+    Student.query.filter_by(semester_id=id).delete()
+    TeachingGrade.query.filter_by(semester_id=id).delete()
     db.session.execute(db.text('DELETE FROM training_group_student WHERE group_id IN (SELECT id FROM training_group WHERE semester_id = :sid)'), {'sid': id})
     db.session.delete(sem)
     db.session.commit()
@@ -1237,7 +1362,8 @@ def student_list():
     special_physical_count = sum(1 for s in all_students if s.special_physical == '是')
     special_physical_notes = [{'name': s.name, 'note': s.special_physical_note} for s in all_students if s.special_physical == '是' and s.special_physical_note]
     withdrawn_count = sum(1 for s in Student.query.filter_by(semester_id=sem_id) if s.status == 'withdrawn')
-    withdrawn_students = [s for s in all_students if s.status == 'withdrawn']
+    # P1-4：从全量学生中筛流失（all_students 已排除流失，不能用它）
+    withdrawn_students = [s for s in Student.query.filter_by(semester_id=sem_id) if s.status == 'withdrawn']
 
     # 总人数排除流失
     active_students = [s for s in all_students if s.status != 'withdrawn']
@@ -1366,7 +1492,7 @@ def student_edit(id):
     return render_template('student_form.html', student=student)
 
 
-@app.route('/students/<int:id>/delete')
+@app.route('/students/<int:id>/delete', methods=['GET', 'POST'])
 @login_required
 def student_delete(id):
     student = db.get_or_404(Student, id)
@@ -1379,6 +1505,11 @@ def student_delete(id):
         Discipline.query.filter_by(student_id=id).delete()
         ViolationRecord.query.filter_by(student_id=id).delete()
         SeatAssignment.query.filter_by(student_id=id).delete()
+        CourseStudent.query.filter_by(name=name, semester_id=get_current_semester_id()).delete()
+        # 沟通记录：先删附件文件再删记录
+        for cr in CommunicationRecord.query.filter_by(student_id=id).all():
+            communication_delete_files(cr.attachments)
+        CommunicationRecord.query.filter_by(student_id=id).delete()
         # 清理实训分组多对多关联
         try:
             db.session.execute(db.text('DELETE FROM training_group_student WHERE student_id = :sid'), {'sid': id})
@@ -1613,13 +1744,815 @@ def discipline_edit_form():
     return redirect(url_for('discipline_list'))
 
 
-@app.route('/discipline/<int:id>/delete')
+@app.route('/discipline/<int:id>/delete', methods=['GET', 'POST'])
 def discipline_delete(id):
     d = db.get_or_404(Discipline, id)
     db.session.delete(d)
     db.session.commit()
     flash('处分记录已删除')
     return redirect(url_for('discipline_list'))
+
+
+# ── 沟通记录（家访 / 家校沟通 / 学生谈话）──
+# ══════════════════════════════════════════════
+
+COMM_TYPE_LABELS = {'visit': '家访', 'home_school': '家校沟通', 'talk': '学生谈话'}
+COMM_TYPE_ICONS = {'visit': 'fas fa-home', 'home_school': 'fas fa-handshake', 'talk': 'fas fa-comments'}
+COMM_TYPE_COLORS = {'visit': 'primary', 'home_school': 'success', 'talk': 'warning'}
+
+
+def communication_save_file(file, prefix):
+    """保存沟通附件，返回 {name, path, kind}；非法文件返回 None"""
+    if not file or not file.filename:
+        return None
+    ext = _safe_upload_ext(file.filename, ALLOWED_COMM_EXTENSIONS)
+    if not ext:
+        return None
+    name = f'comm_{prefix}_{datetime.now().strftime("%Y%m%d%H%M%S")}_{random.randint(1000,9999)}.{ext}'
+    path = os.path.join(UPLOAD_FOLDER, name)
+    file.save(path)
+    if ext in ALLOWED_IMAGE_EXTENSIONS:
+        kind = 'image'
+    elif ext in ALLOWED_AUDIO_EXTENSIONS:
+        kind = 'audio'
+    else:
+        kind = 'other'
+    return {'name': file.filename or name, 'path': f'uploads/{name}', 'kind': kind}
+
+
+def communication_parse_attachments(attachments_json):
+    """解析附件JSON，返回附件列表"""
+    try:
+        atts = json.loads(attachments_json or '[]')
+        return atts if isinstance(atts, list) else []
+    except Exception:
+        return []
+
+
+def communication_delete_files(attachments_json):
+    """删除记录关联的附件物理文件（校验路径防穿越）"""
+    real_upload = os.path.realpath(UPLOAD_FOLDER) + os.sep
+    for a in communication_parse_attachments(attachments_json):
+        try:
+            rel = a.get('path', '')
+            if not rel.startswith('uploads/'):
+                continue
+            p = os.path.realpath(os.path.join(BASE_DIR, 'static', rel))
+            if not p.startswith(real_upload):
+                continue
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
+
+
+@app.route('/communication')
+@login_required
+def communication_list():
+    comm_type = request.args.get('type', '')
+    if comm_type not in COMM_TYPE_LABELS:
+        comm_type = ''
+    sem_id = get_current_semester_id()
+    q = CommunicationRecord.query
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    if comm_type:
+        q = q.filter_by(comm_type=comm_type)
+    records = q.order_by(CommunicationRecord.comm_date.desc(), CommunicationRecord.id.desc()).all()
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
+    student_map = {s.id: s.name for s in students}
+    parsed = [{'record': r, 'attachments': communication_parse_attachments(r.attachments)} for r in records]
+    # 各板块计数（用于tab徽章）
+    counts = {}
+    base_q = CommunicationRecord.query
+    if sem_id:
+        base_q = base_q.filter_by(semester_id=sem_id)
+    for r in base_q.all():
+        counts[r.comm_type] = counts.get(r.comm_type, 0) + 1
+    counts['all'] = len(counts) and sum(counts.values()) or 0
+    return render_template('communication.html', records=parsed, students=students,
+                           student_map=student_map, current_type=comm_type,
+                           type_labels=COMM_TYPE_LABELS, type_icons=COMM_TYPE_ICONS,
+                           type_colors=COMM_TYPE_COLORS, counts=counts, now=datetime.now())
+
+
+@app.route('/communication/add', methods=['POST'])
+@login_required
+def communication_add():
+    comm_type = request.form.get('comm_type', '')
+    if comm_type not in COMM_TYPE_LABELS:
+        flash('请选择沟通类型')
+        return redirect(url_for('communication_list'))
+    try:
+        comm_date = date.fromisoformat(request.form.get('comm_date', ''))
+    except Exception:
+        comm_date = date.today()
+    student_id = request.form.get('student_id', type=int)
+    if student_id:
+        stu = db.session.get(Student, student_id)
+        cur_sem = get_current_semester_id()
+        if not stu or (cur_sem and stu.semester_id != cur_sem):
+            student_id = None  # 学生不存在或不属于当前学期 → 视为不指定
+
+    attachments = []
+    ts = datetime.now().strftime('%Y%m%d%H%M%S')
+    for key, prefix in (('images', 'img'), ('audios', 'aud'), ('docs', 'doc')):
+        for f in request.files.getlist(key):
+            item = communication_save_file(f, f'{prefix}_{ts}')
+            if item:
+                attachments.append(item)
+
+    rec = CommunicationRecord(
+        comm_type=comm_type, student_id=student_id,
+        title=request.form.get('title', '').strip(),
+        content=request.form.get('content', '').strip(),
+        comm_date=comm_date,
+        location=request.form.get('location', '').strip(),
+        # 家访专属字段
+        visit_form=request.form.get('visit_form', '').strip(),
+        visit_companion=request.form.get('visit_companion', '').strip(),
+        visit_category=request.form.get('visit_category', '').strip(),
+        visit_summary=request.form.get('visit_summary', '').strip(),
+        visit_family_members=request.form.get('visit_family_members', '[]') or '[]',
+        visit_parent_relation=request.form.get('visit_parent_relation', '').strip(),
+        visit_atmosphere=request.form.get('visit_atmosphere', '').strip(),
+        visit_living_together=request.form.get('visit_living_together', '').strip(),
+        visit_generation_foster=request.form.get('visit_generation_foster', '').strip(),
+        visit_physiology=request.form.get('visit_physiology', '').strip(),
+        visit_psychology=request.form.get('visit_psychology', '').strip(),
+        visit_study_attitude=request.form.get('visit_study_attitude', '').strip(),
+        visit_study_habit=request.form.get('visit_study_habit', '').strip(),
+        visit_academic_level=request.form.get('visit_academic_level', '').strip(),
+        visit_strengths=request.form.get('visit_strengths', '').strip(),
+        visit_problems=request.form.get('visit_problems', '').strip(),
+        visit_parenting_style=request.form.get('visit_parenting_style', '').strip(),
+        visit_parent_needs=request.form.get('visit_parent_needs', '').strip(),
+        visit_teacher_advice=request.form.get('visit_teacher_advice', '').strip(),
+        attachments=json.dumps(attachments, ensure_ascii=False),
+        semester_id=get_current_semester_id()
+    )
+    db.session.add(rec)
+    db.session.commit()
+    flash(f'{COMM_TYPE_LABELS[comm_type]}记录已添加（附件 {len(attachments)} 个）')
+    return redirect(url_for('communication_list', type=comm_type))
+
+
+@app.route('/communication/<int:id>/delete', methods=['POST'])
+@login_required
+def communication_delete(id):
+    rec = db.get_or_404(CommunicationRecord, id)
+    communication_delete_files(rec.attachments)
+    db.session.delete(rec)
+    db.session.commit()
+    flash('沟通记录已删除')
+    return redirect(request.referrer or url_for('communication_list'))
+
+
+# ── 家访导出（Word 信息收集表 + Excel 统计表，格式复刻学校模板）──
+
+VISIT_RELATION_OPTIONS = ['婚内同居', '婚内分居', '离异', '再婚', '丧偶']
+VISIT_ATMOSPHERE_OPTIONS = ['和睦', '一般', '欠和睦', '沉闷', '紧张']
+VISIT_LOVE_OPTIONS = ['喜爱', '较喜爱', '一般', '不喜爱', '讨厌']
+
+
+def _visit_checkline(value, options):
+    """生成勾选文本：☑选中 ☐未选"""
+    return ' '.join(('☑' if value == o else '☐') + o for o in options)
+
+
+def _visit_parse_family(family_json):
+    try:
+        arr = json.loads(family_json or '[]')
+        return arr if isinstance(arr, list) else []
+    except Exception:
+        return []
+
+
+def _visit_student_of(rec, stu_map):
+    return stu_map.get(rec.student_id)
+
+
+# ─────────────────────────────────────────────────────────────
+# 家访信息收集表 Word 精确复刻（逐 cell 对齐原模板：页面/表格/单元格段落格式/字号/合并结构）
+# ─────────────────────────────────────────────────────────────
+
+COL_TWIPS = [975, 758, 1304, 732, 1144, 284, 83, 720, 920, 246, 654, 1000, 600]  # 13列总宽9420
+ROW_HEIGHTS = [640, 640, 660, 420, 480, 620, 600, 580, 620, 680,
+               780, 760, 740, 740, 720, 720, 795, 795,
+               795, 795, 795, 795, 795, 794, 795, 795, 795, 6205]
+
+# 单元格段落格式预设 (line, rule, jc, sz)
+_F_LBL23 = dict(line=300, rule='atLeast', jc='center', sz=23)     # 标签 居中 atLeast 11.5pt
+_F_VAL23 = dict(line=300, rule='exact', jc='both', sz=23)         # 内容 两端 exact 11.5pt
+_F_LBL23E = dict(line=300, rule='exact', jc='both', sz=23)        # 家访时间/班级 标签
+_F_C23 = dict(line=300, rule='exact', jc='center', sz=23)         # 家访陪同人员 标签
+_F_LBL21 = dict(line=280, rule='atLeast', jc='center', sz=21)     # 优点评估等标签 10.5pt
+_F_VAL21 = dict(line=280, rule='exact', jc='both', sz=21)         # 优点评估等内容 10.5pt
+_F_LBL21_300 = dict(line=300, rule='atLeast', jc='center', sz=21)  # 家长的教育方式 标签
+_F_PSY = dict(line=320, rule='atLeast', jc='both', sz=23)         # 心理勾选项
+_F_LEFT23 = dict(line=300, rule='atLeast', jc='left', sz=23)      # 重大疾病/心理疾病
+
+
+def _visit_para(text, f, indL=0, nosp=False, bold=False):
+    """构造 w:p 元素（pPr + 一个宋体 run）。nosp=True 时只保留 jc（无 spacing/ind）。"""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    p = OxmlElement('w:p')
+    pPr = OxmlElement('w:pPr')
+    if not nosp:
+        sp = OxmlElement('w:spacing')
+        sp.set(qn('w:before'), '0'); sp.set(qn('w:after'), '0')
+        sp.set(qn('w:line'), str(f['line'])); sp.set(qn('w:lineRule'), f['rule'])
+        pPr.append(sp)
+        ind = OxmlElement('w:ind')
+        ind.set(qn('w:left'), str(indL)); ind.set(qn('w:right'), '0')
+        pPr.append(ind)
+    j = OxmlElement('w:jc'); j.set(qn('w:val'), f['jc']); pPr.append(j)
+    p.append(pPr)
+    r = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    rf = OxmlElement('w:rFonts')
+    for a in ('ascii', 'hAnsi', 'eastAsia', 'cs'):
+        rf.set(qn('w:' + a), '宋体')
+    rPr.append(rf)
+    if bold:
+        rPr.append(OxmlElement('w:b'))
+        rPr.append(OxmlElement('w:bCs'))
+    else:
+        b = OxmlElement('w:b'); b.set(qn('w:val'), '0'); rPr.append(b)
+    i = OxmlElement('w:i'); i.set(qn('w:val'), '0'); rPr.append(i)
+    st = OxmlElement('w:strike'); st.set(qn('w:val'), '0'); rPr.append(st)
+    color = OxmlElement('w:color'); color.set(qn('w:val'), '000000'); rPr.append(color)
+    s = OxmlElement('w:sz'); s.set(qn('w:val'), str(f['sz'])); rPr.append(s)
+    r.append(rPr)
+    t = OxmlElement('w:t'); t.set(qn('xml:space'), 'preserve'); t.text = text
+    r.append(t)
+    p.append(r)
+    return p
+
+
+def _visit_empty_p():
+    from docx.oxml import OxmlElement
+    return OxmlElement('w:p')
+
+
+def _visit_inject_photos(doc, rec):
+    """佐证材料：把上传的照片嵌入表格最后一行内容格（2列并排，宽5.5cm）。
+    无照片时保留原有文件名文字；音频/文档附件以文件名列出。"""
+    from docx.shared import Cm, Pt
+    from docx.oxml.ns import qn
+    attachments = rec.get('attachments') or []
+    images = [a for a in attachments if isinstance(a, dict) and a.get('kind') == 'image']
+    others = [a for a in attachments if isinstance(a, dict) and a.get('kind') != 'image']
+    try:
+        tbl = doc.tables[-1]
+        last_row = len(tbl.rows) - 1
+        cell = tbl.cell(last_row, 1)  # 佐证材料内容格（gridSpan=12）
+        # 保留第一个段落作为容器（w:tc 必须至少有一个 w:p），清空其余段落和 run
+        paras = cell.paragraphs
+        for p in paras[1:]:
+            p._p.getparent().remove(p._p)
+        first = paras[0]
+        for r in list(first.runs):
+            r._r.getparent().remove(r._r)
+        if images:
+            import math
+            sub = cell.add_table(rows=math.ceil(len(images) / 2), cols=2)
+            for i, img in enumerate(images):
+                r, c = divmod(i, 2)
+                p = sub.cell(r, c).paragraphs[0]
+                p.alignment = 1  # center
+                abs_path = img.get('abs_path', '')
+                try:
+                    if abs_path and os.path.exists(abs_path):
+                        run = p.add_run()
+                        run.add_picture(abs_path, width=Cm(5.5))
+                    else:
+                        p.add_run(f'[图片缺失] {img.get("name", "")}')
+                except Exception:
+                    p.add_run(f'[无法嵌入] {img.get("name", "")}')
+        if others:
+            run = first.add_run('；'.join(a.get('name', '') for a in others))
+            run.font.size = Pt(10.5)
+            run.font.name = '宋体'
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
+    except Exception:
+        pass
+
+
+def _visit_cell(paras, w, span=None, vmerge=None):
+    """构造 w:tc 元素。paras: list of w:p。"""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    tc = OxmlElement('w:tc')
+    tcPr = OxmlElement('w:tcPr')
+    tw = OxmlElement('w:tcW'); tw.set(qn('w:w'), str(w)); tw.set(qn('w:type'), 'dxa')
+    tcPr.append(tw)
+    if span:
+        gs = OxmlElement('w:gridSpan'); gs.set(qn('w:val'), str(span)); tcPr.append(gs)
+    if vmerge:
+        vm = OxmlElement('w:vMerge')
+        if vmerge == 'restart':
+            vm.set(qn('w:val'), 'restart')
+        tcPr.append(vm)
+    va = OxmlElement('w:vAlign'); va.set(qn('w:val'), 'center'); tcPr.append(va)
+    tc.append(tcPr)
+    for p in paras:
+        tc.append(p)
+    return tc
+
+
+def _visit_tr(cells, height):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    tr = OxmlElement('w:tr')
+    trPr = OxmlElement('w:trPr')
+    th = OxmlElement('w:trHeight'); th.set(qn('w:val'), str(height)); th.set(qn('w:hRule'), 'atLeast')
+    trPr.append(th)
+    tr.append(trPr)
+    for c in cells:
+        tr.append(c)
+    return tr
+
+
+def _visit_sum_cols(c0, span):
+    return sum(COL_TWIPS[c0:c0 + span])
+
+
+def _visit_body_append(doc, element):
+    from docx.oxml.ns import qn
+    sectPr = doc.element.body.find(qn('w:sectPr'))
+    sectPr.addprevious(element)
+
+
+def _visit_page_break():
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    p = OxmlElement('w:p')
+    r = OxmlElement('w:r')
+    br = OxmlElement('w:br'); br.set(qn('w:type'), 'page')
+    r.append(br)
+    p.append(r)
+    return p
+
+
+def _visit_build_table(rec):
+    """构造家访收集表 w:tbl 元素。rec: dict。"""
+    fam = rec.get('family') or []
+    data_rows = max(5, len(fam))
+
+    # 行高：前10行固定，多余家庭成员行高600插在第10行(索引9)之后
+    heights = ROW_HEIGHTS[:10] + [600] * (data_rows - 5) + ROW_HEIGHTS[10:]
+
+    def cell(paras, c0, span=1, vmerge=None, zero=False):
+        w = 0 if zero else _visit_sum_cols(c0, span)
+        return _visit_cell(paras, w, span if span > 1 else None, vmerge)
+
+    def P(text, f, indL=0, nosp=False):
+        return _visit_para(text, f, indL=indL, nosp=nosp)
+
+    def V(text, f=_F_VAL23):
+        """内容单元格：有值填值，无值填空格占位（对齐模板空白格）"""
+        return P(text if text not in (None, '') else ' ', f)
+
+    rows = []
+
+    # ── R0 学生姓名 / 班级 ──
+    rows.append(_visit_tr([
+        cell([P('学生姓名', _F_LBL23)], 0),
+        cell([V(rec.get('student_name'), _F_LBL23)], 1, 3),
+        cell([P('班级', _F_LBL23E)], 4, 3),
+        cell([V(rec.get('class_name'), _F_VAL23)], 7, 6),
+    ], heights[0]))
+
+    # ── R1 家访时间 / 陪同人员 ──
+    rows.append(_visit_tr([
+        cell([P('家访时间', _F_LBL23E)], 0),
+        cell([V(rec.get('visit_time'), _F_VAL23)], 1, 3),
+        cell([P('家访陪同人员', _F_C23)], 4, 3),
+        cell([V(rec.get('companion'), _F_VAL23)], 7, 6),
+    ], heights[1]))
+
+    # ── R2 家庭住址 / 家访形式 ──
+    rows.append(_visit_tr([
+        cell([P('家庭住址', _F_LBL23)], 0),
+        cell([V(rec.get('address'), _F_VAL23)], 1, 6),
+        cell([P('家访形式', _F_LBL23)], 7, 2),
+        cell([V(rec.get('visit_form'), _F_VAL23)], 9, 4),
+    ], heights[2]))
+
+    # ── R3 家庭成员表头1（col0-4 竖合并至表头2）──
+    rows.append(_visit_tr([
+        cell([P('家庭成员', _F_LBL23)], 0, 1, 'restart'),
+        cell([P('关系', _F_LBL23)], 1, 1, 'restart'),
+        cell([P('姓名', _F_LBL23)], 2, 1, 'restart'),
+        cell([P('年龄', _F_LBL23)], 3, 1, 'restart'),
+        cell([P('职业', _F_LBL23)], 4, 3, 'restart'),
+        cell([P('学生对他(她)的喜爱度', _F_LBL23)], 7, 5),
+        cell([P(' ', _F_VAL23)], 12),
+    ], heights[3]))
+
+    # ── R4 家庭成员表头2（喜爱度细分）──
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([_visit_empty_p()], 1, 1, 'continue'),
+        cell([_visit_empty_p()], 2, 1, 'continue'),
+        cell([_visit_empty_p()], 3, 1, 'continue'),
+        cell([_visit_empty_p()], 4, 3, 'continue'),
+        cell([P('喜爱', _F_LBL23)], 7),
+        cell([P('较喜爱', _F_LBL23)], 8),
+        cell([P('一般', _F_LBL23)], 9, 2),
+        cell([P('不喜爱', _F_LBL23)], 11),
+        cell([P('讨厌', _F_LBL23)], 12),
+    ], heights[4]))
+
+    # ── R5.. 家庭成员数据行 ──
+    love_cols = [(7, '喜爱'), (8, '较喜爱'), (9, '一般'), (11, '不喜爱'), (12, '讨厌')]
+    for i in range(data_rows):
+        m = fam[i] if i < len(fam) and isinstance(fam[i], dict) else {}
+        love = m.get('love', '')
+        cells = [cell([_visit_empty_p()], 0, 1, 'continue')]
+        cells.append(cell([V(m.get('relation'))], 1))
+        cells.append(cell([V(m.get('name'))], 2))
+        cells.append(cell([V(m.get('age'))], 3))
+        cells.append(cell([V(m.get('occupation'))], 4, 3))
+        for cidx, lname in love_cols:
+            mark = '√' if love == lname else ''
+            if cidx == 9:
+                cells.append(cell([V(mark)], cidx, 2))
+            else:
+                cells.append(cell([V(mark)], cidx))
+        rows.append(_visit_tr(cells, heights[5 + i]))
+
+    r = 5 + data_rows  # 当前行索引
+
+    # ── 父母关系 ──
+    rows.append(_visit_tr([
+        cell([P('父母关系', _F_LBL23)], 0),
+        cell([P(_visit_checkline(rec.get('parent_relation'), VISIT_RELATION_OPTIONS), _F_LBL23)], 1, 12),
+    ], heights[r]))
+
+    # ── 家庭气氛 ──
+    rows.append(_visit_tr([
+        cell([P('家庭气氛', _F_LBL23)], 0),
+        cell([P(_visit_checkline(rec.get('atmosphere'), VISIT_ATMOSPHERE_OPTIONS), _F_LBL23)], 1, 12),
+    ], heights[r + 1]))
+
+    # ── 家庭抚养 ──
+    live_mark = '☑' if rec.get('living_together') == '是' else '☐'
+    foster_mark = '☑' if rec.get('generation_foster') == '是' else '☐'
+    rows.append(_visit_tr([
+        cell([P('家庭抚养', _F_LBL23)], 0),
+        cell([P(f'孩子出生到现在是否和父母生活在一起? {live_mark}是 ☐否孩子', _F_LBL23)], 1, 5),
+        cell([P(f'是否隔代抚养? {foster_mark}是 ☐否', _F_LBL23)], 6, 7),
+    ], heights[r + 2]))
+
+    r += 3  # 疾病史起始行
+
+    # ── 疾病史 R+0 生理方面 ──
+    rows.append(_visit_tr([
+        cell([P('疾病史', _F_LBL23)], 0, 1, 'restart'),
+        cell([P('生理方面', _F_LBL23)], 1, 12),
+    ], heights[r]))
+
+    # ── 疾病史 R+1 生理内容 ──
+    phys = rec.get('physiology') or ''
+    phys_ok = ('健康' in phys) or (not phys)
+    phys_mark = '☑' if phys_ok else '☐'
+    disease = phys if phys and '健康' not in phys else ''
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P(f'{phys_mark}身体健康，', _F_LBL23, nosp=True), P('无相关疾病', _F_LBL23, nosp=True)], 1, 2),
+        cell([P(f'重大疾病：{disease}', _F_LEFT23)], 3, 10),
+    ], heights[r + 1]))
+
+    # ── 疾病史 R+2 心理方面 ──
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P('心理方面', _F_C23), P(' ', _F_VAL23)], 1, 12),
+    ], heights[r + 2]))
+
+    # ── 疾病史 R+3 心理内容 ──
+    psych = rec.get('psychology') or ''
+    psych_ok = ('健康' in psych) or (not psych)
+    pm = '☑' if psych_ok else '☐'
+
+    def mark(key):
+        return '☑' if key in psych else '☐'
+
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P(f'{pm}心理健康，无相关疾病', _F_LBL23)], 1, 2),
+        cell([P(f'{mark("情绪状态")}情绪状态', _F_PSY, indL=420), P('(孩子是否有较大的情绪起伏等', _F_PSY, indL=160)], 3, 2),
+        cell([P(f'{mark("行为表现")}行为表现', _F_PSY, indL=420), P('(孩子是否有自我伤害等行为)现象)', _F_PSY, indL=160)], 5, 5),
+        cell([P(f'{mark("语言表现")}语言表现', _F_PSY, indL=420), P('(孩子是否说过“生活无趣”之类的话?)', _F_PSY, indL=160)], 10, 3),
+    ], heights[r + 3]))
+
+    # ── 疾病史 R+4 心理疾病 ──
+    psych_disease = psych if (psych and '健康' not in psych) else ''
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P('心理疾病：', _F_LBL23)], 1, 2),
+        cell([P(psych_disease if psych_disease else ' ', _F_LEFT23)], 3, 10),
+    ], heights[r + 4]))
+
+    r += 5  # 学习情况起始行
+
+    # ── 学习情况（col0 竖合并3行）──
+    rows.append(_visit_tr([
+        cell([P('学习情况', _F_LBL23), _visit_empty_p()], 0, 1, 'restart'),
+        cell([P('学习态度', _F_LBL23)], 1, 2),
+        cell([V(rec.get('study_attitude'))], 3, 10),
+    ], heights[r]))
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P('学习习惯', _F_LBL23)], 1, 2),
+        cell([V(rec.get('study_habit'))], 3, 10),
+    ], heights[r + 1]))
+    rows.append(_visit_tr([
+        cell([_visit_empty_p()], 0, 1, 'continue'),
+        cell([P('近期学业水平', _F_LBL23), P('情况', _F_LBL23)], 1, 2),
+        cell([V(rec.get('academic_level'))], 3, 10),
+    ], heights[r + 2]))
+
+    r += 3  # 评估区起始行
+
+    # ── 优点评估（sz21）──
+    rows.append(_visit_tr([
+        cell([P('优点评估', _F_LBL21)], 0),
+        cell([V(rec.get('strengths'), _F_VAL21)], 1, 12),
+    ], heights[r]))
+    # ── 问题评估（tcW=0，与原模板一致）──
+    rows.append(_visit_tr([
+        cell([P('问题评估', _F_LBL21)], 0, 1, None, zero=True),
+        cell([V(rec.get('problems'), _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 1]))
+    # ── 家长的教育方式（两段，line=300）──
+    rows.append(_visit_tr([
+        cell([P('家长的教', _F_LBL21_300), P('育方式', _F_LBL21_300)], 0, 1, None, zero=True),
+        cell([V(rec.get('parenting_style'), _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 2]))
+    # ── 家长的需求和建议 ──
+    rows.append(_visit_tr([
+        cell([P('家长的需求和建议', _F_LBL21)], 0, 1, None, zero=True),
+        cell([V(rec.get('parent_needs'), _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 3]))
+    # ── 教师对家长的建议 ──
+    rows.append(_visit_tr([
+        cell([P('教师对家长的建议', _F_LBL21)], 0, 1, None, zero=True),
+        cell([V(rec.get('teacher_advice'), _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 4]))
+    # ── 备注 ──
+    rows.append(_visit_tr([
+        cell([P('备注', _F_LBL21)], 0, 1, None, zero=True),
+        cell([V(rec.get('note'), _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 5]))
+    # ── 佐证材料 ──
+    att_line = '；'.join(a.get('name', '') for a in (rec.get('attachments') or []) if isinstance(a, dict))
+    rows.append(_visit_tr([
+        cell([P('佐证材料', _F_LBL21)], 0, 1, None, zero=True),
+        cell([V(att_line, _F_VAL21)], 1, 12, None, zero=True),
+    ], heights[r + 6]))
+
+    # ── 组装 tbl ──
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    tbl = OxmlElement('w:tbl')
+    tblPr = OxmlElement('w:tblPr')
+    ts = OxmlElement('w:tblStyle'); ts.set(qn('w:val'), '2'); tblPr.append(ts)
+    tw = OxmlElement('w:tblW'); tw.set(qn('w:w'), '9420'); tw.set(qn('w:type'), 'dxa'); tblPr.append(tw)
+    jc = OxmlElement('w:jc'); jc.set(qn('w:val'), 'center'); tblPr.append(jc)
+    borders = OxmlElement('w:tblBorders')
+    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        e = OxmlElement('w:' + edge)
+        e.set(qn('w:val'), 'single'); e.set(qn('w:color'), 'auto')
+        e.set(qn('w:sz'), '2'); e.set(qn('w:space'), '0')
+        borders.append(e)
+    tblPr.append(borders)
+    layout = OxmlElement('w:tblLayout'); layout.set(qn('w:type'), 'fixed'); tblPr.append(layout)
+    mar = OxmlElement('w:tblCellMar')
+    for edge in ('top', 'left', 'bottom', 'right'):
+        e = OxmlElement('w:' + edge); e.set(qn('w:w'), '0'); e.set(qn('w:type'), 'dxa')
+        mar.append(e)
+    tblPr.append(mar)
+    tbl.append(tblPr)
+
+    grid = OxmlElement('w:tblGrid')
+    for w in COL_TWIPS:
+        gc = OxmlElement('w:gridCol'); gc.set(qn('w:w'), str(w)); grid.append(gc)
+    tbl.append(grid)
+
+    for tr in rows:
+        tbl.append(tr)
+
+    return tbl
+
+
+def build_visit_docx(records):
+    """records: list of dict。返回 Document（纯函数，无 Flask/ORM 依赖）。"""
+    from docx import Document
+    from docx.shared import Pt, Twips
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    doc = Document()
+    # 页面设置（与原模板 sectPr 一致：A4，边距 top/bottom 1440，left/right 1800）
+    sec = doc.sections[0]
+    sec.page_width = Twips(11906)
+    sec.page_height = Twips(16838)
+    sec.top_margin = Twips(1440)
+    sec.bottom_margin = Twips(1440)
+    sec.left_margin = Twips(1800)
+    sec.right_margin = Twips(1800)
+    sec.header_distance = Twips(851)
+    sec.footer_distance = Twips(992)
+    sectPr = sec._sectPr
+    old = sectPr.find(qn('w:docGrid'))
+    if old is not None:
+        sectPr.remove(old)
+    dg = OxmlElement('w:docGrid')
+    dg.set(qn('w:type'), 'lines'); dg.set(qn('w:linePitch'), '312'); dg.set(qn('w:charSpace'), '0')
+    sectPr.append(dg)
+
+    normal = doc.styles['Normal']
+    normal.font.size = Pt(10.5)
+
+    for ri, rec in enumerate(records):
+        if ri > 0:
+            _visit_body_append(doc, _visit_page_break())
+        _visit_body_append(doc, _visit_para('附件2：', dict(line=580, rule='atLeast', jc='left', sz=28), bold=True))
+        _visit_body_append(doc, _visit_para('榆中师范学校家访信息收集表', dict(line=580, rule='atLeast', jc='center', sz=42), bold=True))
+        _visit_body_append(doc, _visit_build_table(rec))
+        _visit_inject_photos(doc, rec)
+        _visit_body_append(doc, _visit_empty_p())
+
+    return doc
+
+
+@app.route('/communication/export/visit-docx')
+@login_required
+def communication_export_visit_docx():
+    """导出家访信息收集表（Word，逐 cell 复刻学校原模板）"""
+    import io
+
+    sem_id = get_current_semester_id()
+    q = CommunicationRecord.query.filter_by(comm_type='visit')
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    records = q.order_by(CommunicationRecord.comm_date.desc(), CommunicationRecord.id.desc()).all()
+    if not records:
+        flash('当前学期暂无家访记录，无法导出')
+        return redirect(url_for('communication_list', type='visit'))
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
+    stu_map = {s.id: s for s in students}
+
+    data = []
+    for rec in records:
+        stu = stu_map.get(rec.student_id)
+        data.append({
+            'student_name': stu.name if stu else '',
+            'class_name': stu.class_name if stu else '',
+            'visit_time': rec.comm_date.strftime('%Y年%m月%d日') if rec.comm_date else '',
+            'companion': rec.visit_companion or '',
+            'address': rec.location or '',
+            'visit_form': rec.visit_form or '',
+            'family': _visit_parse_family(rec.visit_family_members),
+            'parent_relation': rec.visit_parent_relation or '',
+            'atmosphere': rec.visit_atmosphere or '',
+            'living_together': rec.visit_living_together or '',
+            'generation_foster': rec.visit_generation_foster or '',
+            'physiology': rec.visit_physiology or '',
+            'psychology': rec.visit_psychology or '',
+            'study_attitude': rec.visit_study_attitude or '',
+            'study_habit': rec.visit_study_habit or '',
+            'academic_level': rec.visit_academic_level or '',
+            'strengths': rec.visit_strengths or '',
+            'problems': rec.visit_problems or '',
+            'parenting_style': rec.visit_parenting_style or '',
+            'parent_needs': rec.visit_parent_needs or '',
+            'teacher_advice': rec.visit_teacher_advice or '',
+            'note': rec.content or '',
+            'attachments': [dict(a, abs_path=os.path.join(BASE_DIR, 'static', a.get('path', '')))
+                             for a in communication_parse_attachments(rec.attachments)],
+        })
+    doc = build_visit_docx(data)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    fname = f'家访信息收集表_{date.today().strftime("%Y%m%d")}.docx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+
+@app.route('/communication/export/visit-xlsx')
+@login_required
+def communication_export_visit_xlsx():
+    """导出大家访情况统计表（Excel，格式复刻学校模板）"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side
+    import io
+
+    sem_id = get_current_semester_id()
+    q = CommunicationRecord.query.filter_by(comm_type='visit')
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    records = q.order_by(CommunicationRecord.comm_date.desc(), CommunicationRecord.id.desc()).all()
+    if not records:
+        flash('当前学期暂无家访记录，无法导出')
+        return redirect(url_for('communication_list', type='visit'))
+    students = [s for s in get_semester_students() if s.status != 'withdrawn']
+    stu_map = {s.id: s for s in students}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '家访统计'
+
+    thin = Side(style='thin', color='000000')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    left_wrap = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+    year = date.today().year
+    # 班级/班主任/电话
+    class_name = ''
+    for rec in records:
+        stu = _visit_student_of(rec, stu_map)
+        if stu and stu.class_name:
+            class_name = stu.class_name
+            break
+    teacher = session.get('username', '')
+    phone = ''
+
+    # 标题（A1:J1）
+    ws.merge_cells('A1:J1')
+    ws['A1'] = f'{year}年榆中师范学校秋季学期开学大家访情况统计表'
+    ws['A1'].font = Font(name='宋体', size=16, bold=True)
+    ws['A1'].alignment = center
+    ws.row_dimensions[1].height = 30
+
+    # 第二行：班级/班主任/联系电话
+    ws.merge_cells('A2:C2'); ws['A2'] = f'班级：{class_name}'
+    ws.merge_cells('E2:G2'); ws['E2'] = f'班主任：{teacher}'
+    ws.merge_cells('I2:J2'); ws['I2'] = f'联系电话：{phone}'
+    for c in ('A2', 'E2', 'I2'):
+        ws[c].font = Font(name='宋体', size=12)
+        ws[c].alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[2].height = 37
+
+    # 表头（第3行）
+    headers = ['序号', '学校', '班级', '国网学籍号', '学生\n姓名', '学生\n性别', '学生\n年龄',
+               '家访形式（电话、网络、入户）', '类型\n（如：留守儿童/经济困难/\n学业问题/心理困境等）',
+               '学生情况\n（客观陈述，50字以内）']
+    for ci, h in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=ci, value=h)
+        cell.font = Font(name='宋体', size=11, bold=True)
+        cell.alignment = center
+        cell.border = border
+    ws.row_dimensions[3].height = 40
+
+    # 数据行
+    for ri, rec in enumerate(records):
+        r = 4 + ri
+        stu = _visit_student_of(rec, stu_map)
+        age = ''
+        if stu and stu.id_card and len(stu.id_card) >= 18:
+            try:
+                birth = stu.id_card[6:14]
+                age = str(date.today().year - int(birth[:4]))
+            except Exception:
+                age = ''
+        row_vals = [
+            ri + 1,
+            '榆中师范学校',
+            stu.class_name if stu else '',
+            stu.student_id if stu else '',
+            stu.name if stu else '',
+            stu.gender if stu else '',
+            age,
+            rec.visit_form or '',
+            rec.visit_category or '',
+            (rec.visit_summary or '')[:50],
+        ]
+        for ci, v in enumerate(row_vals, 1):
+            cell = ws.cell(row=r, column=ci, value=v)
+            cell.font = Font(name='宋体', size=11)
+            cell.alignment = left_wrap if ci == 10 else center
+            cell.border = border
+        ws.row_dimensions[r].height = 42
+
+    # 列宽（复刻模板）
+    col_widths = {'A': 5.4, 'B': 27.1, 'C': 11.5, 'D': 21.5, 'E': 9.6, 'F': 9.6, 'G': 9.6,
+                  'H': 15.8, 'I': 22.6, 'J': 35.8}
+    for col, w in col_widths.items():
+        ws.column_dimensions[col].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f'大家访情况统计表_{date.today().strftime("%Y%m%d")}.xlsx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @app.route('/export/discipline')
@@ -1800,9 +2733,10 @@ def attendance():
                 row_period = int(request.form.get(f'period_sum_{s.id}', 2047))
                 row_period = max(0, min(2047, row_period))
 
-                # 每人每天一条记录，按日期查找
+                # 每人每天一条记录，按日期查找（必须带学期，防跨学期污染）
                 existing = Attendance.query.filter_by(
-                    student_id=s.id, date=form_date
+                    student_id=s.id, date=form_date,
+                    semester_id=get_current_semester_id()
                 ).first()
 
                 if existing:
@@ -1811,23 +2745,21 @@ def attendance():
                     existing.period = row_period
                     existing.semester_id = get_current_semester_id()
                     if image_file and image_file.filename:
-                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS, 'jpg')
-                        if not ext:
-                            continue
-                        safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
-                        save_path = os.path.join(UPLOAD_FOLDER, safe_name)
-                        image_file.save(save_path)
-                        existing.image_path = f'uploads/{safe_name}'
+                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS)
+                        if ext:
+                            safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
+                            save_path = os.path.join(UPLOAD_FOLDER, safe_name)
+                            image_file.save(save_path)
+                            existing.image_path = f'uploads/{safe_name}'
                 else:
                     image_path = ''
                     if image_file and image_file.filename:
-                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS, 'jpg')
-                        if not ext:
-                            continue
-                        safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
-                        save_path = os.path.join(UPLOAD_FOLDER, safe_name)
-                        image_file.save(save_path)
-                        image_path = f'uploads/{safe_name}'
+                        ext = _safe_upload_ext(image_file.filename, ALLOWED_IMAGE_EXTENSIONS)
+                        if ext:
+                            safe_name = f'att_{s.id}_{form_date_str.replace("-","")}_{row_period}_{random.randint(1000,9999)}.{ext}'
+                            save_path = os.path.join(UPLOAD_FOLDER, safe_name)
+                            image_file.save(save_path)
+                            image_path = f'uploads/{safe_name}'
                     db.session.add(Attendance(
                         student_id=s.id, date=form_date, status=status,
                         reason=reason, period=row_period,
@@ -1975,7 +2907,7 @@ def violation_edit(id):
     students = Student.query.order_by(Student.name).all()
     return render_template('violation_edit.html', v=v, students=students)
 
-@app.route('/violation/<int:id>/delete')
+@app.route('/violation/<int:id>/delete', methods=['GET', 'POST'])
 @login_required
 def violation_delete(id):
     v = db.get_or_404(ViolationRecord, id); db.session.delete(v); db.session.commit()
@@ -2118,6 +3050,8 @@ def fund_add():
     try: d = datetime.strptime(request.form.get('date',''), '%Y-%m-%d').date()
     except Exception: pass
     ft = request.form.get('type', 'income')
+    if ft not in ('income', 'expense'):
+        ft = 'income'
     amount = request.form.get('amount', type=float, default=0)
     f = ClassFund(date=d, type=ft, amount=abs(amount), reason=request.form.get('reason',''),
                   notes=request.form.get('notes',''), semester_id=get_current_semester_id())
@@ -2130,13 +3064,13 @@ def fund_add():
                 flash('凭据仅支持 jpg、jpeg、png、gif、webp 图片')
                 return redirect(url_for('fund_list'))
             ext = f'.{ext_name}'
-            filename = f'fund_{int(time.time())}{ext}'
+            filename = f'fund_{int(time.time())}_{random.randint(1000,9999)}{ext}'
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             f.voucher = filename
     db.session.add(f); db.session.commit()
     flash(f'{"收入" if ft=="income" else "支出"} {amount:.2f} 元已记录'); return redirect(url_for('fund_list'))
 
-@app.route('/fund/<int:id>/delete')
+@app.route('/fund/<int:id>/delete', methods=['GET', 'POST'])
 @login_required
 def fund_delete(id):
     f = db.get_or_404(ClassFund, id)
@@ -2431,7 +3365,7 @@ def training_project_add():
     return redirect(url_for('training'))
 
 
-@app.route('/training/project/<int:id>/delete')
+@app.route('/training/project/<int:id>/delete', methods=['GET', 'POST'])
 def training_project_delete(id):
     project = db.get_or_404(TrainingProject, id)
     TrainingRecord.query.filter_by(project_id=id).delete()
@@ -2720,7 +3654,7 @@ def seat_assign():
 
     # 验证学生属于当前学期
     student = db.session.get(Student, student_id)
-    if not student:
+    if not student or (sem_id and student.semester_id != sem_id):
         return jsonify({'ok': False, 'error': '学生不存在'})
 
     # 清除该学生的其他座位安排（一学生一座）
@@ -2871,6 +3805,16 @@ def schedule_view():
         if s.day_of_week in week:
             week[s.day_of_week].append(s)
     schedule_images = ScheduleImage.query.order_by(ScheduleImage.created_at.desc()).limit(10).all()
+    sem_id_img = get_current_semester_id()
+    # P2-18：先按学期过滤再取最新10张（原逻辑先 limit 后过滤会漏图/串图）
+    if sem_id_img:
+        q_img = ScheduleImage.query.filter(
+            (ScheduleImage.semester_id == sem_id_img) | (ScheduleImage.semester_id.is_(None))
+        ).order_by(ScheduleImage.created_at.desc()).limit(10).all()
+        if q_img:
+            schedule_images = q_img
+        else:
+            schedule_images = [si for si in schedule_images if si.semester_id == sem_id_img or si.semester_id is None]
 
     # 每门课程分配唯一颜色
     all_courses = list(set(s.course_name for s in schedule_data))
@@ -2925,6 +3869,11 @@ def schedule_add():
         flash('参数错误')
         return redirect(url_for('schedule_view'))
 
+    # P2-8：范围校验，防 DAY_NAMES 越界 500
+    if not (0 <= day_of_week <= 4 and 1 <= period <= MAX_PERIOD):
+        flash('节次或星期参数超出范围')
+        return redirect(url_for('schedule_view'))
+
     # 检查是否有冲突
     existing = Schedule.query.filter_by(day_of_week=day_of_week, period=period, semester_id=get_current_semester_id()).first()
     if existing:
@@ -2943,7 +3892,7 @@ def schedule_add():
     return redirect(url_for('schedule_view'))
 
 
-@app.route('/schedule/<int:id>/delete')
+@app.route('/schedule/<int:id>/delete', methods=['GET', 'POST'])
 def schedule_delete(id):
     s = db.get_or_404(Schedule, id)
     db.session.delete(s)
@@ -3144,7 +4093,8 @@ def schedule_upload():
         'time_slots': list(set(time_slots))[:10]
     }, ensure_ascii=False)
 
-    img_record = ScheduleImage(image_path=image_path, raw_text=raw_text, ocr_result=ocr_result)
+    img_record = ScheduleImage(image_path=image_path, raw_text=raw_text, ocr_result=ocr_result,
+                               semester_id=get_current_semester_id())
     db.session.add(img_record)
 
     # 自动填入课表
@@ -3157,7 +4107,7 @@ def schedule_upload():
             continue
         if idx < len(period_order):
             d, p = period_order[idx]
-            existing = Schedule.query.filter_by(day_of_week=d, period=p).first()
+            existing = Schedule.query.filter_by(day_of_week=d, period=p, semester_id=get_current_semester_id()).first()
             if not existing:
                 db.session.add(Schedule(day_of_week=d, period=p, course_name=c,
                                        semester_id=get_current_semester_id()))
@@ -3181,7 +4131,7 @@ def schedule_upload():
 @app.route('/schedule/parse_sheet', methods=['POST'])
 def schedule_parse_sheet():
     """解析指定sheet的Excel课表"""
-    file_path = request.form.get('file_path', session.get('excel_path', ''))
+    file_path = session.get('excel_path', '')  # 只信任 session（防任意文件删除）
     sheet_name = request.form.get('sheet_name', '')
 
     if not file_path or not os.path.exists(file_path):
@@ -3212,12 +4162,183 @@ def schedule_parse_sheet():
     except Exception as e:
         flash(f'解析失败: {e}')
     finally:
+        # 纵深防御：仅删除 UPLOAD_FOLDER 内的文件
         try:
-            os.remove(file_path)
+            real_upload = os.path.realpath(UPLOAD_FOLDER) + os.sep
+            if os.path.realpath(file_path).startswith(real_upload):
+                os.remove(file_path)
         except Exception:
             pass
 
     return redirect(url_for('schedule_view'))
+
+
+# ── 教师课表（课表管理-第二部分）──
+# ══════════════════════════════════════════════
+
+@app.route('/schedule/teachers')
+@login_required
+def schedule_teachers():
+    sem_id = get_current_semester_id()
+    q = TeacherSchedule.query
+    if sem_id:
+        q = q.filter_by(semester_id=sem_id)
+    records = q.order_by(TeacherSchedule.id.desc()).all()
+    # 选中教师（?id= 或默认第一个）
+    sel_id = request.args.get('id', type=int)
+    selected = None
+    for r in records:
+        if r.id == sel_id:
+            selected = r
+            break
+    if selected is None and records:
+        selected = records[0]
+    # 解析课程 → week 结构 {day: {period: [课程]}}
+    week = {d: {} for d in range(5)}
+    try:
+        courses = json.loads(selected.courses_json or '[]') if selected else []
+    except Exception:
+        courses = []
+    if not isinstance(courses, list):
+        courses = []
+    for c in courses:
+        d = c.get('day_of_week')
+        p = c.get('period')
+        if d in week and p:
+            week[d].setdefault(p, []).append(c)
+    # 课程配色（与班级课表一致）
+    palette = ['#e6f7ff', '#f6ffed', '#fff7e6', '#fce4ec', '#f3e5f5',
+               '#e0f2f1', '#fff8e1', '#fbe9e7', '#e8eaf6', '#f1f8e9']
+    course_color = {}
+    all_courses = list({c.get('course_name', '') for c in courses if c.get('course_name')})
+    for i, cn in enumerate(all_courses):
+        course_color[cn] = palette[i % len(palette)]
+    return render_template('teachers_schedule.html', records=records, selected=selected,
+                           week=week, course_color=course_color,
+                           day_names=DAY_NAMES, max_period=MAX_PERIOD,
+                           period_times=PERIOD_TIMES if 'PERIOD_TIMES' in globals() else {},
+                           now=datetime.now())
+
+
+@app.route('/schedule/teachers/add', methods=['POST'])
+@login_required
+def schedule_teacher_add():
+    teacher_name = request.form.get('teacher_name', '').strip()
+    file = request.files.get('teacher_image')
+    if not teacher_name:
+        flash('请填写教师姓名')
+        return redirect(url_for('schedule_teachers'))
+    if not file or not file.filename:
+        flash('请选择课表文件（xlsx 或图片）')
+        return redirect(url_for('schedule_teachers'))
+    ext = _safe_upload_ext(file.filename, ALLOWED_SCHEDULE_IMAGE_EXTENSIONS | ALLOWED_EXCEL_EXTENSIONS)
+    if not ext:
+        flash('仅支持 xls/xlsx 或 jpg/png/gif/webp/heic/heif 图片')
+        return redirect(url_for('schedule_teachers'))
+    name = f'tsched_{datetime.now().strftime("%Y%m%d%H%M%S")}_{random.randint(1000,9999)}.{ext}'
+    save_path = os.path.join(UPLOAD_FOLDER, name)
+    file.save(save_path)
+    courses_json = '[]'
+    image_path = ''
+    if ext in ALLOWED_EXCEL_EXTENSIONS:
+        # xlsx：先列出 sheet 页（与班级课表一致），多 sheet 时引导选择
+        try:
+            sheets = []
+            if ext == 'xls':
+                import xlrd
+                wb = xlrd.open_workbook(save_path)
+                sheets = wb.sheet_names()
+            else:
+                from openpyxl import load_workbook
+                wb = load_workbook(save_path, read_only=True)
+                sheets = wb.sheetnames
+            if len(sheets) > 1:
+                session['teacher_excel_path'] = save_path
+                session['teacher_name'] = teacher_name
+                return render_template('teachers_schedule_sheets.html',
+                                       sheets=sheets, file_path=save_path,
+                                       teacher_name=teacher_name, now=datetime.now())
+            sheet_name = sheets[0] if sheets else None
+            courses = parse_excel_schedule(save_path, sheet_name)
+            courses_json = json.dumps(courses, ensure_ascii=False)
+            try:
+                os.remove(save_path)
+            except Exception:
+                pass
+        except Exception as e:
+            flash(f'课表解析失败: {e}')
+            try:
+                os.remove(save_path)
+            except Exception:
+                pass
+            return redirect(url_for('schedule_teachers'))
+    else:
+        image_path = f'uploads/{name}'
+    rec = TeacherSchedule(teacher_name=teacher_name, image_path=image_path,
+                          courses_json=courses_json,
+                          semester_id=get_current_semester_id())
+    db.session.add(rec)
+    db.session.commit()
+    flash(f'教师「{teacher_name}」课表已添加')
+    return redirect(url_for('schedule_teachers', id=rec.id))
+
+
+@app.route('/schedule/teachers/parse_sheet', methods=['POST'])
+@login_required
+def schedule_teacher_parse_sheet():
+    """教师课表：解析指定 sheet 的 Excel 课表（多 sheet 文件选择后调用）"""
+    file_path = session.get('teacher_excel_path', '')  # 只信任 session（防任意文件删除）
+    sheet_name = request.form.get('sheet_name', '')
+    teacher_name = session.get('teacher_name', '').strip() or request.form.get('teacher_name', '').strip()
+
+    if not file_path or not os.path.exists(file_path):
+        flash('文件不存在或已过期，请重新上传')
+        session.pop('teacher_excel_path', None)
+        session.pop('teacher_name', None)
+        return redirect(url_for('schedule_teachers'))
+    if not teacher_name:
+        flash('教师姓名丢失，请重新上传')
+        return redirect(url_for('schedule_teachers'))
+
+    rec = None
+    try:
+        courses = parse_excel_schedule(file_path, sheet_name)
+        rec = TeacherSchedule(teacher_name=teacher_name,
+                              courses_json=json.dumps(courses, ensure_ascii=False),
+                              semester_id=get_current_semester_id())
+        db.session.add(rec)
+        db.session.commit()
+        flash(f'教师「{teacher_name}」课表已从「{sheet_name}」导入 {len(courses)} 条课程')
+    except Exception as e:
+        flash(f'解析失败: {e}')
+    finally:
+        # 纵深防御：仅删除 UPLOAD_FOLDER 内的文件
+        try:
+            real_upload = os.path.realpath(UPLOAD_FOLDER) + os.sep
+            if os.path.realpath(file_path).startswith(real_upload):
+                os.remove(file_path)
+        except Exception:
+            pass
+        session.pop('teacher_excel_path', None)
+        session.pop('teacher_name', None)
+
+    return redirect(url_for('schedule_teachers', id=rec.id if rec else None))
+
+
+@app.route('/schedule/teachers/<int:id>/delete', methods=['POST'])
+@login_required
+def schedule_teacher_delete(id):
+    rec = db.get_or_404(TeacherSchedule, id)
+    try:
+        p = os.path.join(BASE_DIR, 'static', rec.image_path)
+        if os.path.exists(p):
+            os.remove(p)
+    except Exception:
+        pass
+    db.session.delete(rec)
+    db.session.commit()
+    flash('教师课表已删除')
+    return redirect(url_for('schedule_teachers'))
 
 
 # ══════════════════════════════════════════════
@@ -3562,7 +4683,8 @@ def export_grades():
     
     # 学期行
     ws.merge_cells('A2:F2')
-    ws.cell(row=2, column=1, value='2025-2026-2 学期').font = Font(name='黑体', size=12)
+    _sem = db.session.get(Semester, get_current_semester_id()) if get_current_semester_id() else None
+    ws.cell(row=2, column=1, value=f'{_sem.name if _sem else "当前"} 学期').font = Font(name='黑体', size=12)
     ws.cell(row=2, column=1).alignment = center
     ws.row_dimensions[2].height = 22
     
@@ -3843,7 +4965,7 @@ def subject_add():
     return redirect(url_for('grades'))
 
 
-@app.route('/subject/<int:id>/delete')
+@app.route('/subject/<int:id>/delete', methods=['GET', 'POST'])
 def subject_delete(id):
     s = db.get_or_404(Subject, id)
     name = s.name
@@ -4029,6 +5151,28 @@ def _parse_cmb_header(data: bytes):
         return None
 
 
+def _backup_owner(fname):
+    """从备份文件名解析归属用户ID（字符串）；无法确认归属返回 None。
+    .cmb 解析头部 user_id；.db 从自动备份文件名尾部的 _uid 解析。"""
+    fname = os.path.basename(fname)
+    if fname.endswith('.cmb'):
+        try:
+            with open(os.path.join(BACKUP_DIR, fname), 'rb') as f:
+                head = _parse_cmb_header(f.read(512))
+            if head:
+                return str(head['user_id'])
+        except Exception:
+            pass
+        return None
+    if fname.endswith('.db'):
+        # 格式：auto_backup_before_restore_{ts}_{uid}.db / auto_backup_before_reset_{ts}_{uid}.db
+        m = re.search(r'^auto_backup_before_(?:restore|reset)_\d{8}_\d{6}_(\d+)\.db$', fname)
+        if m:
+            return m.group(1)
+        return None
+    return None
+
+
 def _migrate_db_schema(db_path: str, from_version: str = ''):
     """前向兼容：对旧版本的备份数据库执行 schema 迁移（ALTER TABLE 增加缺失列）"""
     try:
@@ -4119,13 +5263,13 @@ def data_management():
                         backup_item['user_id'] = head['user_id']
                 except Exception:
                     pass
-            # .db 文件：传统格式
+            # .db 文件：传统格式（归属从自动备份文件名解析）
             elif fname.endswith('.db'):
                 backup_item['version'] = '旧版'
-                backup_item['user_id'] = '—'
+                backup_item['user_id'] = _backup_owner(fname)
 
-            # 只显示当前用户的备份（或传统 .db 文件）
-            if fname.endswith('.cmb') and backup_item['user_id'] != current_user_id:
+            # 只显示当前用户的备份（含 .db 自动备份，按归属过滤）
+            if str(backup_item['user_id']) != str(current_user_id):
                 continue
 
             backups.append(backup_item)
@@ -4209,7 +5353,7 @@ def data_upload():
         if os.path.exists(db_path):
             import shutil
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}.db')
+            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}_{user_id}.db')
             shutil.copy2(db_path, auto_backup_path)
 
         file_bytes = file.read()
@@ -4251,6 +5395,9 @@ def data_upload():
                 flash('加密备份已恢复！')
         elif file.filename.endswith('.db'):
             # 传统 .db 格式 — 直接恢复
+            if not file_bytes.startswith(b'SQLite format 3\x00'):
+                flash('无效的数据库文件（不是有效的 SQLite 数据库）')
+                return redirect(url_for('data_management'))
             db.session.remove()
             db.engine.dispose()
             with open(db_path, 'wb') as f:
@@ -4310,11 +5457,14 @@ def data_backups():
 @app.route('/data/backups/<filename>/download')
 @login_required
 def data_backup_download(filename):
-    """下载指定的备份文件"""
+    """下载指定的备份文件（校验归属，防跨用户访问）"""
     safe_name = os.path.basename(filename)
     backup_path = os.path.join(BACKUP_DIR, safe_name)
     if not os.path.exists(backup_path):
         flash('备份文件不存在')
+        return redirect(url_for('data_management'))
+    if _backup_owner(safe_name) != str(session.get('user_id')):
+        flash('无权访问该备份文件')
         return redirect(url_for('data_management'))
     return send_file(
         backup_path,
@@ -4328,9 +5478,12 @@ def data_backup_download(filename):
 @app.route('/data/backups/<filename>/delete', methods=['POST'])
 @login_required
 def data_backup_delete(filename):
-    """删除指定的备份文件"""
+    """删除指定的备份文件（校验归属，防跨用户删除）"""
     safe_name = os.path.basename(filename)
     backup_path = os.path.join(BACKUP_DIR, safe_name)
+    if _backup_owner(safe_name) != str(session.get('user_id')):
+        flash('无权删除该备份文件')
+        return redirect(url_for('data_management'))
     if os.path.exists(backup_path):
         try:
             os.remove(backup_path)
@@ -4383,7 +5536,7 @@ def data_restore_from_backup(filename):
         if os.path.exists(db_path):
             import shutil
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}.db')
+            auto_backup_path = os.path.join(BACKUP_DIR, f'auto_backup_before_restore_{timestamp}_{user_id}.db')
             shutil.copy2(db_path, auto_backup_path)
 
         # 关闭连接并替换数据库
@@ -4446,6 +5599,49 @@ def data_reset():
             shutil.copy2(db_path, auto_backup_path)
 
         # 清空所有业务表（按外键依赖顺序从子到父）
+        # 先清理物理文件（沟通附件/课表图片）
+        for cr in CommunicationRecord.query.all():
+            communication_delete_files(cr.attachments)
+        for si in ScheduleImage.query.all():
+            try:
+                fp = os.path.join(BASE_DIR, 'static', si.image_path)
+                if os.path.exists(fp):
+                    os.remove(fp)
+            except Exception:
+                pass
+        for ts in TeacherSchedule.query.all():
+            try:
+                fp = os.path.join(BASE_DIR, 'static', ts.image_path)
+                if os.path.exists(fp):
+                    os.remove(fp)
+            except Exception:
+                pass
+        # P1-3：补清处分图/考勤图/班费凭据物理文件
+        for d in Discipline.query.all():
+            for key in ('image_notification', 'image_letter'):
+                try:
+                    for p in json.loads(getattr(d, key) or '[]'):
+                        fp = os.path.join(BASE_DIR, 'static', p)
+                        if os.path.exists(fp):
+                            os.remove(fp)
+                except Exception:
+                    pass
+        for a in Attendance.query.all():
+            if a.image_path:
+                try:
+                    fp = os.path.join(BASE_DIR, 'static', a.image_path)
+                    if os.path.exists(fp):
+                        os.remove(fp)
+                except Exception:
+                    pass
+        for f in ClassFund.query.all():
+            if f.voucher:
+                try:
+                    fp = os.path.join(UPLOAD_FOLDER, f.voucher)
+                    if os.path.exists(fp):
+                        os.remove(fp)
+                except Exception:
+                    pass
         db.session.execute(db.text('DELETE FROM attendance'))
         db.session.execute(db.text('DELETE FROM grade'))
         db.session.execute(db.text('DELETE FROM teaching_grade'))
@@ -4457,17 +5653,21 @@ def data_reset():
         db.session.execute(db.text('DELETE FROM training_group'))
         db.session.execute(db.text('DELETE FROM training_project'))
         db.session.execute(db.text('DELETE FROM schedule'))
+        db.session.execute(db.text('DELETE FROM schedule_image'))
+        db.session.execute(db.text('DELETE FROM teacher_schedule'))
         db.session.execute(db.text('DELETE FROM course_student'))
         db.session.execute(db.text('DELETE FROM seat_assignment'))
         db.session.execute(db.text('DELETE FROM seat'))
         db.session.execute(db.text('DELETE FROM student'))
         db.session.execute(db.text('DELETE FROM subject'))
+        db.session.execute(db.text('DELETE FROM communication_record'))
 
         # 清空学期，创建一个默认学期
         db.session.execute(db.text('DELETE FROM semester'))
         from datetime import date
-        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025, 9, 1),
-                     end_date=date(2026, 1, 15), is_current=True)
+        now_year = date.today().year
+        s = Semester(name=f'{now_year}-{now_year+1}学年度第1学期', start_date=date(now_year, 9, 1),
+                     end_date=date(now_year+1, 1, 15), is_current=True)
         db.session.add(s)
         db.session.commit()
         session['semester_id'] = s.id
@@ -4503,6 +5703,30 @@ def _run_alter_migrations(db_file):
         except Exception: pass
         try: c.execute('ALTER TABLE subject ADD COLUMN source VARCHAR(16) DEFAULT "grade"')
         except Exception: pass
+        # 沟通记录附件JSON（预留列，实际表由 db.create_all 创建）
+        try: c.execute('ALTER TABLE schedule_image ADD COLUMN semester_id INTEGER')
+        except Exception: pass
+        # 教师课表课程数据（v1.0.8：xlsx解析）
+        try: c.execute('ALTER TABLE teacher_schedule ADD COLUMN courses_json TEXT DEFAULT "[]"')
+        except Exception: pass
+        # 沟通记录-家访专属字段（v1.0.8：家访信息收集表模板）
+        _comm_cols = [
+            ('visit_form', 'VARCHAR(32)', '""'), ('visit_companion', 'VARCHAR(64)', '""'),
+            ('visit_category', 'VARCHAR(64)', '""'), ('visit_summary', 'VARCHAR(200)', '""'),
+            ('visit_family_members', 'TEXT', '[]'), ('visit_parent_relation', 'VARCHAR(32)', '""'),
+            ('visit_atmosphere', 'VARCHAR(32)', '""'), ('visit_living_together', 'VARCHAR(8)', '""'),
+            ('visit_generation_foster', 'VARCHAR(8)', '""'), ('visit_physiology', 'TEXT', '""'),
+            ('visit_psychology', 'TEXT', '""'), ('visit_study_attitude', 'TEXT', '""'),
+            ('visit_study_habit', 'TEXT', '""'), ('visit_academic_level', 'TEXT', '""'),
+            ('visit_strengths', 'TEXT', '""'), ('visit_problems', 'TEXT', '""'),
+            ('visit_parenting_style', 'TEXT', '""'), ('visit_parent_needs', 'TEXT', '""'),
+            ('visit_teacher_advice', 'TEXT', '""'),
+        ]
+        for col, typ, dflt in _comm_cols:
+            try:
+                c.execute(f'ALTER TABLE communication_record ADD COLUMN {col} {typ} DEFAULT {dflt}')
+            except Exception:
+                pass
         # 迁移现有数据：有CourseStudent的科目设为teaching
         try:
             c.execute("UPDATE subject SET source='teaching' WHERE id IN (SELECT DISTINCT course_id FROM course_student)")
@@ -4675,9 +5899,10 @@ if __name__ == '__main__':
             # 为admin创建业务数据库并初始化
             switch_to_user_db(admin.id)
             from datetime import date
+            now_year = date.today().year
             if Semester.query.count() == 0:
-                s = Semester(name='2025-2026学年度第1学期', start_date=date(2025,9,1),
-                             end_date=date(2026,1,15), is_current=True)
+                s = Semester(name=f'{now_year}-{now_year+1}学年度第1学期', start_date=date(now_year,9,1),
+                             end_date=date(now_year+1,1,15), is_current=True)
                 db.session.add(s)
                 db.session.commit()
                 print('已创建默认学期')
@@ -4692,9 +5917,10 @@ if __name__ == '__main__':
                     # 执行ALTER TABLE迁移
                     _run_alter_migrations(user_db_path)
                     from datetime import date
+                    now_year = date.today().year
                     if Semester.query.count() == 0:
-                        s = Semester(name='2025-2026学年度第1学期', start_date=date(2025,9,1),
-                                     end_date=date(2026,1,15), is_current=True)
+                        s = Semester(name=f'{now_year}-{now_year+1}学年度第1学期', start_date=date(now_year,9,1),
+                                     end_date=date(now_year+1,1,15), is_current=True)
                         db.session.add(s)
                         db.session.commit()
                         print(f'已为用户 {mu.username} 创建业务数据库和默认学期')

@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="page-title">
+    <i class="fas fa-comments"></i> 沟通记录
+    <small class="ms-2" style="font-weight:400;color:#6e6e73">家访 · 家校沟通 · 学生谈话</small>
+    <span class="float-end d-flex gap-1 flex-wrap">
+        {% if current_type == 'visit' or not current_type %}
+        <a href="/communication/export/visit-docx" class="btn btn-sm btn-outline-primary" title="导出家访信息收集表（Word，一人一表）"><i class="fas fa-file-word"></i> 导出记录表</a>
+        <a href="/communication/export/visit-xlsx" class="btn btn-sm btn-outline-success" title="导出大家访情况统计表（Excel）"><i class="fas fa-file-excel"></i> 导出统计表</a>
+        {% endif %}
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#commModal" onclick="setCommType('{{ current_type }}')">
+            <i class="fas fa-plus"></i> 新增记录
+        </button>
+    </span>
+</h4>
+
+<style>
+    .comm-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .comm-tab {
+        display:inline-flex; align-items:center; gap:6px;
+        padding:8px 16px; border-radius:10px; background:#fff;
+        border:1px solid rgba(0,0,0,0.06); box-shadow:0 1px 3px rgba(0,0,0,0.04);
+        color:#1d1d1f; font-size:13px; font-weight:500; text-decoration:none;
+        transition:all .2s ease;
+    }
+    .comm-tab:hover { border-color:#007aff; color:#007aff; }
+    .comm-tab.active { background:#007aff; border-color:#007aff; color:#fff; }
+    .comm-tab .badge { background:rgba(0,0,0,0.08); color:inherit; font-weight:600; }
+    .comm-tab.active .badge { background:rgba(255,255,255,0.25); color:#fff; }
+    .comm-card { border:1px solid rgba(0,0,0,0.06); box-shadow:0 1px 3px rgba(0,0,0,0.04); border-radius:14px; margin-bottom:14px; }
+    .comm-card .card-body { padding:16px 18px; }
+    .comm-attach-img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid rgba(0,0,0,0.06); cursor:zoom-in; }
+    .comm-audio { width:100%; max-width:360px; height:34px; }
+    .v-badge { background:#f5f5f7; color:#3a3a3c; font-size:12px; font-weight:500; border-radius:6px; padding:3px 9px; }
+    .fam-table th { font-size:11px; color:#6e6e73; font-weight:600; padding:4px 8px; background:#fafafc; }
+    .fam-table td { font-size:12.5px; padding:4px 8px; }
+    .visit-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:8px 16px; }
+    .visit-detail-grid .vd-item { border-bottom:1px dashed rgba(0,0,0,0.07); padding:6px 0; }
+    .visit-detail-grid .vd-label { color:#6e6e73; font-size:12px; font-weight:600; display:block; }
+    .visit-detail-grid .vd-val { font-size:13px; color:#1d1d1f; white-space:pre-wrap; word-break:break-word; }
+    .form-section { background:#fafafc; border:1px solid rgba(0,0,0,0.05); border-radius:10px; padding:12px 14px; }
+    .form-section .fs-title { font-size:13px; font-weight:700; color:#1d1d1f; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+</style>
+
+<!-- Tab 导航 -->
+<div class="comm-tabs">
+    <a class="comm-tab {% if not current_type %}active{% endif %}" href="/communication">
+        <i class="fas fa-layer-group"></i> 全部 <span class="badge rounded-pill">{{ counts.get('all', 0) }}</span>
+    </a>
+    <a class="comm-tab {% if current_type == 'visit' %}active{% endif %}" href="/communication?type=visit">
+        <i class="fas fa-home"></i> 家访 <span class="badge rounded-pill">{{ counts.get('visit', 0) }}</span>
+    </a>
+    <a class="comm-tab {% if current_type == 'home_school' %}active{% endif %}" href="/communication?type=home_school">
+        <i class="fas fa-handshake"></i> 家校沟通 <span class="badge rounded-pill">{{ counts.get('home_school', 0) }}</span>
+    </a>
+    <a class="comm-tab {% if current_type == 'talk' %}active{% endif %}" href="/communication?type=talk">
+        <i class="fas fa-comments"></i> 学生谈话 <span class="badge rounded-pill">{{ counts.get('talk', 0) }}</span>
+    </a>
+</div>
+
+<!-- 记录列表 -->
+{% if records %}
+{% for item in records %}
+{% set r = item.record %}
+{% set family = [] %}
+{% if r.comm_type == 'visit' %}
+    {% set family = r.visit_family_members|from_json %}
+{% endif %}
+<div class="card comm-card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge bg-{{ type_colors.get(r.comm_type, 'secondary') }}" style="font-size:12px">
+                    <i class="{{ type_icons.get(r.comm_type, 'fas fa-comments') }}"></i> {{ type_labels.get(r.comm_type, '沟通') }}
+                </span>
+                <strong style="font-size:15px">{{ r.title or '（未填写主题）' }}</strong>
+                {% if r.student_id and student_map.get(r.student_id) %}
+                <span class="badge bg-light text-dark" style="font-weight:500"><i class="fas fa-user"></i> {{ student_map[r.student_id] }}</span>
+                {% else %}
+                <span class="badge bg-light text-dark" style="font-weight:500"><i class="fas fa-users"></i> 集体/未指定</span>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <small class="text-muted"><i class="fas fa-calendar"></i> {{ r.comm_date.strftime('%Y-%m-%d') }}</small>
+                {% if r.location %}<small class="text-muted"><i class="fas fa-map-marker-alt"></i> {{ r.location }}</small>{% endif %}
+                <form method="post" action="/communication/{{ r.id }}/delete" onsubmit="return confirm('确认删除这条沟通记录？附件文件将一并删除。')" class="d-inline m-0">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </div>
+
+        {% if r.comm_type == 'visit' %}
+        <!-- 家访信息摘要 -->
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            {% if r.visit_form %}<span class="v-badge"><i class="fas fa-phone-alt"></i> 形式：{{ r.visit_form }}</span>{% endif %}
+            {% if r.visit_companion %}<span class="v-badge"><i class="fas fa-user-friends"></i> 陪同：{{ r.visit_companion }}</span>{% endif %}
+            {% if r.visit_category %}<span class="v-badge"><i class="fas fa-tag"></i> 类型：{{ r.visit_category }}</span>{% endif %}
+        </div>
+        {% if family %}
+        <div class="mt-2">
+            <small class="text-muted d-block mb-1"><i class="fas fa-users"></i> 家庭成员（{{ family|length }}）</small>
+            <table class="table table-sm fam-table mb-0" style="max-width:560px">
+                <thead><tr><th>关系</th><th>姓名</th><th>年龄</th><th>职业</th><th>喜爱度</th></tr></thead>
+                <tbody>
+                    {% for m in family %}
+                    <tr><td>{{ m.relation or '' }}</td><td>{{ m.name or '' }}</td><td>{{ m.age or '' }}</td><td>{{ m.occupation or '' }}</td><td>{{ m.love or '' }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% if r.visit_summary %}
+        <div class="mt-2" style="font-size:13.5px;color:#3a3a3c"><i class="fas fa-align-left text-muted"></i> {{ r.visit_summary }}</div>
+        {% endif %}
+        <button class="btn btn-sm btn-outline-secondary mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#vd{{ r.id }}">
+            <i class="fas fa-chevron-down"></i> 查看家访详情
+        </button>
+        <div class="collapse mt-2" id="vd{{ r.id }}">
+            <div class="visit-detail-grid">
+                <div class="vd-item"><span class="vd-label">父母关系</span><span class="vd-val">{{ r.visit_parent_relation or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">家庭气氛</span><span class="vd-val">{{ r.visit_atmosphere or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">和父母生活</span><span class="vd-val">{{ r.visit_living_together or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">隔代抚养</span><span class="vd-val">{{ r.visit_generation_foster or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">生理方面</span><span class="vd-val">{{ r.visit_physiology or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">心理方面</span><span class="vd-val">{{ r.visit_psychology or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">学习态度</span><span class="vd-val">{{ r.visit_study_attitude or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">学习习惯</span><span class="vd-val">{{ r.visit_study_habit or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">近期学业水平</span><span class="vd-val">{{ r.visit_academic_level or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">优点评估</span><span class="vd-val">{{ r.visit_strengths or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">问题评估</span><span class="vd-val">{{ r.visit_problems or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">家长的教育方式</span><span class="vd-val">{{ r.visit_parenting_style or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">家长的需求和建议</span><span class="vd-val">{{ r.visit_parent_needs or '—' }}</span></div>
+                <div class="vd-item"><span class="vd-label">教师对家长的建议</span><span class="vd-val">{{ r.visit_teacher_advice or '—' }}</span></div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if r.content %}
+        <div class="mt-2" style="white-space:pre-wrap;color:#3a3a3c;font-size:14px"><i class="fas fa-sticky-note text-muted"></i> {{ r.content }}</div>
+        {% endif %}
+        {% if item.attachments %}
+        <div class="mt-3">
+            <small class="text-muted d-block mb-1"><i class="fas fa-paperclip"></i> 佐证材料（{{ item.attachments|length }}）</small>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                {% for a in item.attachments %}
+                    {% if a.kind == 'image' %}
+                    <a href="/static/{{ a.path }}" target="_blank" title="{{ a.name }}">
+                        <img src="/static/{{ a.path }}" class="comm-attach-img" alt="{{ a.name }}">
+                    </a>
+                    {% elif a.kind == 'audio' %}
+                    <div class="d-flex align-items-center gap-2 border rounded p-1 px-2" style="background:#f5f5f7">
+                        <i class="fas fa-microphone text-danger"></i>
+                        <audio controls preload="none" class="comm-audio" src="/static/{{ a.path }}"></audio>
+                        <a href="/static/{{ a.path }}" download class="text-muted" title="下载录音"><i class="fas fa-download"></i></a>
+                    </div>
+                    {% else %}
+                    <a href="/static/{{ a.path }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-file"></i> {{ a.name }}
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="fas fa-inbox" style="font-size:40px;opacity:.3"></i>
+    <p class="mt-2 mb-0">暂无{{ type_labels.get(current_type, '') }}记录，点击右上角「新增记录」开始记录</p>
+</div>
+{% endif %}
+
+<!-- 新增记录 Modal -->
+<div class="modal fade" id="commModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <form class="modal-content" method="post" action="/communication/add" enctype="multipart/form-data" id="commForm" style="border-radius:14px">
+            <div class="modal-header" style="border-bottom:1px solid rgba(0,0,0,0.06)">
+                <h5 class="modal-title"><i class="fas fa-plus-circle text-primary"></i> 新增沟通记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto">
+                    <input type="hidden" name="comm_type" id="commTypeInput" value="{{ current_type or 'visit' }}">
+                    <input type="hidden" name="visit_family_members" id="visitFamilyJson" value="[]">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">沟通类型</label>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-sm type-pick active" data-type="visit" style="border:2px solid #007aff;background:#007aff;color:#fff;border-radius:8px"><i class="fas fa-home"></i> 家访</button>
+                            <button type="button" class="btn btn-sm type-pick" data-type="home_school" style="border:2px solid #c7c7cc;border-radius:8px"><i class="fas fa-handshake"></i> 家校沟通</button>
+                            <button type="button" class="btn btn-sm type-pick" data-type="talk" style="border:2px solid #c7c7cc;border-radius:8px"><i class="fas fa-comments"></i> 学生谈话</button>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">学生 <small class="text-muted">（家访必选）</small></label>
+                            <select name="student_id" class="form-select form-select-sm">
+                                <option value="">不指定（集体/家长会等）</option>
+                                {% for s in students %}
+                                <option value="{{ s.id }}">{{ s.name }}{% if s.parent_phone %}（{{ s.parent_phone }}）{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">沟通日期</label>
+                            <input type="date" name="comm_date" class="form-control form-control-sm" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold" id="locationLabel">地点 / 方式</label>
+                            <input type="text" name="location" class="form-control form-control-sm" placeholder="如：家中 / 电话 / 微信 / 办公室">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">主题</label>
+                            <input type="text" name="title" class="form-control form-control-sm" placeholder="如：月考成绩下滑沟通、请假未到校核实" maxlength="128">
+                        </div>
+                    </div>
+
+                    <!-- ── 家访专属字段区（仅家访类型显示）── -->
+                    <div id="visitFields">
+                        <div class="row g-3 mt-1">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">家访形式</label>
+                                <select name="visit_form" class="form-select form-select-sm">
+                                    <option value="">请选择</option>
+                                    <option value="入户">入户</option>
+                                    <option value="电话">电话</option>
+                                    <option value="网络">网络</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">家访陪同人员</label>
+                                <input type="text" name="visit_companion" class="form-control form-control-sm" placeholder="如：王老师 / 无">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">类型</label>
+                                <select name="visit_category" class="form-select form-select-sm">
+                                    <option value="">请选择</option>
+                                    <option value="留守儿童">留守儿童</option>
+                                    <option value="经济困难">经济困难</option>
+                                    <option value="学业问题">学业问题</option>
+                                    <option value="心理困境">心理困境</option>
+                                    <option value="其他">其他</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">学生情况 <small class="text-muted">（客观陈述，50字以内，用于统计表）</small></label>
+                                <input type="text" name="visit_summary" class="form-control form-control-sm" maxlength="100" placeholder="如：家庭经济较困难，父母在外打工，学生由奶奶照顾，学习自觉性一般">
+                            </div>
+                        </div>
+
+                        <div class="form-section mt-3">
+                            <div class="fs-title"><i class="fas fa-users text-primary"></i> 家庭成员</div>
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-2" style="min-width:560px">
+                                    <thead>
+                                        <tr style="font-size:12px;color:#6e6e73">
+                                            <th style="width:15%">关系</th><th style="width:15%">姓名</th>
+                                            <th style="width:10%">年龄</th><th style="width:25%">职业</th>
+                                            <th style="width:25%">喜爱度</th><th style="width:10%"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="familyRows">
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFamilyRow()"><i class="fas fa-plus"></i> 添加家庭成员</button>
+                        </div>
+
+                        <div class="form-section mt-3">
+                            <div class="fs-title"><i class="fas fa-home text-primary"></i> 家庭环境</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold d-block">父母关系</label>
+                                    {% for o in ['婚内同居', '婚内分居', '离异', '再婚', '丧偶'] %}
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="visit_parent_relation" value="{{ o }}" id="vpr{{ loop.index }}"><label class="form-check-label" for="vpr{{ loop.index }}">{{ o }}</label></div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold d-block">家庭气氛</label>
+                                    {% for o in ['和睦', '一般', '欠和睦', '沉闷', '紧张'] %}
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="visit_atmosphere" value="{{ o }}" id="vat{{ loop.index }}"><label class="form-check-label" for="vat{{ loop.index }}">{{ o }}</label></div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold d-block">孩子和父母生活在一起？</label>
+                                    {% for o in ['是', '否'] %}
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="visit_living_together" value="{{ o }}" id="vlt{{ loop.index }}"><label class="form-check-label" for="vlt{{ loop.index }}">{{ o }}</label></div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold d-block">是否隔代抚养？</label>
+                                    {% for o in ['是', '否'] %}
+                                    <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="visit_generation_foster" value="{{ o }}" id="vgf{{ loop.index }}"><label class="form-check-label" for="vgf{{ loop.index }}">{{ o }}</label></div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section mt-3">
+                            <div class="fs-title"><i class="fas fa-heartbeat text-primary"></i> 疾病史与学习情况</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">生理方面 <small class="text-muted">（身体健康/重大疾病）</small></label>
+                                    <input type="text" name="visit_physiology" class="form-control form-control-sm" placeholder="如：身体健康，无相关疾病">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">心理方面 <small class="text-muted">（心理健康/情绪状态/行为表现/语言表现等）</small></label>
+                                    <input type="text" name="visit_psychology" class="form-control form-control-sm" placeholder="如：心理健康，无相关疾病">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">学习态度</label>
+                                    <input type="text" name="visit_study_attitude" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">学习习惯</label>
+                                    <input type="text" name="visit_study_habit" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">近期学业水平情况</label>
+                                    <input type="text" name="visit_academic_level" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section mt-3">
+                            <div class="fs-title"><i class="fas fa-clipboard-check text-primary"></i> 评估与建议</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">优点评估</label>
+                                    <textarea name="visit_strengths" class="form-control form-control-sm" rows="2"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">问题评估</label>
+                                    <textarea name="visit_problems" class="form-control form-control-sm" rows="2"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">家长的教育方式</label>
+                                    <input type="text" name="visit_parenting_style" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">家长的需求和建议</label>
+                                    <textarea name="visit_parent_needs" class="form-control form-control-sm" rows="2"></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">教师对家长的建议</label>
+                                    <textarea name="visit_teacher_advice" class="form-control form-control-sm" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr style="border-color:rgba(0,0,0,0.06)">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold"><i class="fas fa-sticky-note text-muted"></i> 备注</label>
+                            <textarea name="content" class="form-control form-control-sm" rows="2" placeholder="沟通要点、学生/家长反馈、后续跟进计划…"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold"><i class="fas fa-image text-primary"></i> 图片佐证 <small class="text-muted">（jpg/png/gif/webp，可多选）</small></label>
+                            <input type="file" name="images" class="form-control form-control-sm" accept="image/*" multiple>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold"><i class="fas fa-microphone text-danger"></i> 录音佐证 <small class="text-muted">（mp3/wav/m4a/ogg/amr，可多选）</small></label>
+                            <input type="file" name="audios" id="audios" class="form-control form-control-sm" accept="audio/*,.webm" multiple onchange="updateRecFileList()">
+                            <div id="recFileList" class="mt-1 d-flex flex-wrap gap-1"></div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold"><i class="fas fa-file-alt text-success"></i> 其他资料 <small class="text-muted">（pdf/doc/xls 等，可多选）</small></label>
+                            <input type="file" name="docs" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid rgba(0,0,0,0.06)">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> 保存记录</button>
+                </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// 沟通类型选择（联动隐藏字段 + 家访专属字段区显示）
+function setCommType(t) {
+    if (t && ['visit','home_school','talk'].includes(t)) pickType(t);
+}
+function pickType(t) {
+    document.getElementById('commTypeInput').value = t;
+    document.getElementById('visitFields').style.display = (t === 'visit') ? '' : 'none';
+    document.getElementById('locationLabel').textContent = (t === 'visit') ? '家庭住址' : '地点 / 方式';
+    document.querySelectorAll('.type-pick').forEach(function(b) {
+        var active = b.getAttribute('data-type') === t;
+        b.classList.toggle('active', active);
+        b.style.borderColor = active ? '#007aff' : '#c7c7cc';
+        b.style.background = active ? '#007aff' : '#fff';
+        b.style.color = active ? '#fff' : '#1d1d1f';
+    });
+}
+document.querySelectorAll('.type-pick').forEach(function(b) {
+    b.addEventListener('click', function() { pickType(this.getAttribute('data-type')); });
+});
+// Modal 打开时初始化类型
+document.getElementById('commModal').addEventListener('show.bs.modal', function() {
+    var t = document.getElementById('commTypeInput').value || 'visit';
+    pickType(t);
+});
+
+// ── 家庭成员动态行 ──
+function addFamilyRow(data) {
+    data = data || {};
+    var tbody = document.getElementById('familyRows');
+    var tr = document.createElement('tr');
+    var loveOpts = ['喜爱', '较喜爱', '一般', '不喜爱', '讨厌'];
+    var loveHtml = '<select class="form-select form-select-sm f-love"><option value="">请选择</option>';
+    loveOpts.forEach(function(o) {
+        loveHtml += '<option value="' + o + '"' + (data.love === o ? ' selected' : '') + '>' + o + '</option>';
+    });
+    loveHtml += '</select>';
+    tr.innerHTML =
+        '<td><input type="text" class="form-control form-control-sm f-rel" value="' + (data.relation || '') + '" placeholder="如：父亲"></td>' +
+        '<td><input type="text" class="form-control form-control-sm f-name" value="' + (data.name || '') + '"></td>' +
+        '<td><input type="text" class="form-control form-control-sm f-age" value="' + (data.age || '') + '"></td>' +
+        '<td><input type="text" class="form-control form-control-sm f-occ" value="' + (data.occupation || '') + '"></td>' +
+        '<td>' + loveHtml + '</td>' +
+        '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()"><i class="fas fa-trash"></i></button></td>';
+    tbody.appendChild(tr);
+}
+function collectFamily() {
+    var rows = document.querySelectorAll('#familyRows tr');
+    var arr = [];
+    rows.forEach(function(tr) {
+        var rel = tr.querySelector('.f-rel').value.trim();
+        var name = tr.querySelector('.f-name').value.trim();
+        var age = tr.querySelector('.f-age').value.trim();
+        var occ = tr.querySelector('.f-occ').value.trim();
+        var love = tr.querySelector('.f-love').value;
+        if (rel || name || age || occ) {
+            arr.push({relation: rel, name: name, age: age, occupation: occ, love: love});
+        }
+    });
+    document.getElementById('visitFamilyJson').value = JSON.stringify(arr);
+}
+document.getElementById('commForm').addEventListener('submit', function() { collectFamily(); });
+
+// ── 录音文件选择列表（仅文件上传）──
+function updateRecFileList() {
+    var input = document.getElementById('audios');
+    var list = document.getElementById('recFileList');
+    list.innerHTML = '';
+    for (var i = 0; i < input.files.length; i++) {
+        var badge = document.createElement('span');
+        badge.className = 'badge bg-danger-subtle text-danger-emphasis rounded-pill';
+        badge.style.fontWeight = '500';
+        badge.innerHTML = '🎤 ' + input.files[i].name;
+        list.appendChild(badge);
+    }
+}
+</script>
+{% endblock %}

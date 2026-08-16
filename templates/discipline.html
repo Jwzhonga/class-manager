@@ -117,10 +117,10 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="/discipline/{{ r.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除此处分记录？')">
+                                    <a href="#" class="btn btn-sm btn-outline-danger" onclick="return postDelete('/discipline/{{ r.id }}/delete', '删除此处分记录？')">
                                         <i class="fas fa-trash"></i>
                                     </a>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="editDiscipline({{ r.id }}, '{{ r.student.name }}', '{{ r.incident_date }}', '{{ r.location|e }}', '{{ r.reason|e }}', '{{ r.punishment|e }}', '{{ r.notes|e }}')">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editDiscipline({{ r.id }}, {{ r.student.name|tojson }}, {{ r.incident_date|tojson }}, {{ r.location|tojson }}, {{ r.reason|tojson }}, {{ r.punishment|tojson }}, {{ r.notes|tojson }})">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                 </td>

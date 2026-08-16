@@ -7,6 +7,7 @@
     <link href="/static/bootstrap.min.css?v=2" rel="stylesheet">
     <link href="/static/fontawesome.min.css?v=2" rel="stylesheet">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         body {
@@ -115,6 +116,7 @@
                     {% endif %}
                     {% endwith %}
                     <form method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label class="form-label small fw-medium" style="color:#515154">用户名</label>
                             <input type="text" name="username" class="form-control" required placeholder="请输入用户名">

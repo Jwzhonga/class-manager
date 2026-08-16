@@ -86,7 +86,7 @@
                     <div class="seat-cell {% if cell.student %}occupied{% else %}empty{% endif %}"
                          data-seat-id="{{ cell.seat.id }}"
                          draggable="true"
-                         ondragstart="onDragStart(event, {{ cell.seat.id }}, '{% if cell.student %}{{ cell.student.name }}{% endif %}')"
+                         ondragstart="onDragStart(event, {{ cell.seat.id }}, {{ (cell.student.name if cell.student else '')|tojson }})"
                          ondragover="onDragOver(event)"
                          ondragleave="onDragLeave(event)"
                          ondrop="onDrop(event, {{ cell.seat.id }})"
@@ -115,7 +115,7 @@
     {% for s in unassigned_students %}
     <div class="unassigned-item"
          draggable="true"
-         ondragstart="onUnassignedDragStart(event, {{ s.id }}, '{{ s.name }}')"
+         ondragstart="onUnassignedDragStart(event, {{ s.id }}, {{ s.name|tojson }})"
          data-student-id="{{ s.id }}"
          data-student-name="{{ s.name }}">
         {{ s.name }}

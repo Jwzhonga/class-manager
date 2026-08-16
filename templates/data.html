@@ -142,7 +142,7 @@
                                     <i class="fas fa-download"></i> 下载
                                 </a>
                                 {% if b.name.endswith('.cmb') %}
-                                <button type="button" class="btn btn-sm btn-outline-warning me-1" title="恢复" onclick="restoreBackup('{{ b.name }}')">
+                                <button type="button" class="btn btn-sm btn-outline-warning me-1" title="恢复" onclick="restoreBackup({{ b.name|tojson }})">
                                     <i class="fas fa-undo-alt"></i> 恢复
                                 </button>
                                 {% endif %}

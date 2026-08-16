@@ -1,24 +1,82 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+/* ── 考勤周视图 Apple 圆角风格（与全站卡片一致）── */
+.weekly-wrap {
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.02);
+    background: #fff;
+    padding: 14px;
+}
+.weekly-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+    width: 100%;
+}
+.weekly-table thead th {
+    background: #f5f5f7;
+    color: #1d1d1f;
+    font-weight: 600;
+    font-size: 12px;
+    border: none;
+    padding: 10px 8px;
+    white-space: nowrap;
+}
+.weekly-table thead th:first-child { border-radius: 12px 0 0 12px; }
+.weekly-table thead th:last-child { border-radius: 0 12px 12px 0; }
+.weekly-table tbody td {
+    border: none;
+    padding: 10px 8px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    font-size: 12px;
+}
+.weekly-table tbody tr:last-child td { border-bottom: none; }
+.weekly-table tbody tr:hover td { background: #fafafa; }
+.weekly-name { font-weight: 600; color: #1d1d1f; }
+.weekly-cell {
+    display: inline-block;
+    min-width: 48px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.wc-present { background: #f0fdf4; color: #16a34a; }
+.wc-late    { background: #fff7ed; color: #ea580c; }
+.wc-sick    { background: #eff6ff; color: #2563eb; }
+.wc-personal{ background: #fdf4ff; color: #9333ea; }
+.wc-truant  { background: #fef2f2; color: #dc2626; }
+.wc-none    { color: #c7c7cc; }
+.weekly-toolbar .btn { border-radius: 8px; }
+@media (max-width: 767px) {
+    .weekly-wrap { border-radius: 10px; padding: 10px; }
+    .weekly-table { min-width: 640px; }
+    .weekly-table thead th { padding: 8px 6px; font-size: 11px; }
+}
+</style>
+
 <h4 class="page-title"><i class="fas fa-calendar-week"></i> 考勤周视图
     <small class="ms-2"><a href="/export/attendance?format=excel&detail=1" class="btn btn-sm btn-outline-success">明细Excel</a></small>
 </h4>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 weekly-toolbar">
+    <div class="d-flex flex-wrap gap-1">
         <a href="/attendance/weekly?offset={{ week_offset-1 }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-chevron-left"></i> 上一周</a>
         {% if week_offset != 0 %}<a href="/attendance/weekly" class="btn btn-sm btn-outline-secondary">本周</a>{% endif %}
         <a href="/attendance/weekly?offset={{ week_offset+1 }}" class="btn btn-sm btn-outline-secondary">下一周 <i class="fas fa-chevron-right"></i></a>
     </div>
-    <span>第{{ monday.isocalendar()[1] }}周（{{ monday }} ~ {{ sunday }}）</span>
-    <div>
+    <span class="text-muted small">第{{ monday.isocalendar()[1] }}周（{{ monday }} ~ {{ sunday }}）</span>
+    <div class="d-flex flex-wrap gap-1">
         <a href="/attendance" class="btn btn-sm btn-outline-primary"><i class="fas fa-list"></i> 日考勤</a>
         <a href="/attendance/stats" class="btn btn-sm btn-outline-info"><i class="fas fa-chart-bar"></i> 统计</a>
     </div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-bordered table-sm" style="min-width:900px">
+<div class="table-responsive weekly-wrap">
+    <table class="weekly-table">
         <thead>
             <tr>
                 <th style="width:100px">姓名</th>
@@ -32,26 +90,23 @@
         <tbody>
             {% for s in students %}
             <tr>
-                <td><strong>{{ s.student.name }}</strong></td>
+                <td><strong class="weekly-name">{{ s.student.name }}</strong></td>
                 {% for i in range(7) %}
                 {% set d = week_dates[i].isoformat() %}
                 {% set rec = s.records.get(d) %}
-                <td class="text-center" style="{% if rec and rec.status == 'present' %}background:#f6ffed{% elif rec and rec.status == 'truant' %}background:#fff1f0{% elif rec and rec.status == 'sick' %}background:#fffbe6{% elif rec and rec.status == 'personal' %}background:rgba(0,122,255,0.08){% elif rec and rec.status == 'late' %}background:#fff7e6{% endif %}">
-                    {% if rec %}
-                        {% if rec.status == 'present' %}<span class="text-success">✓</span>
-                        {% elif rec.status == 'truant' %}<span class="text-danger">旷{{ rec.period|popcount }}节</span>
-                        {% elif rec.status == 'sick' %}<span class="text-warning">病{{ rec.period|popcount }}节</span>
-                        {% elif rec.status == 'personal' %}<span class="text-primary">事{{ rec.period|popcount }}节</span>
-                        {% elif rec.status == 'late' %}<span class="text-orange">迟{{ rec.period|popcount }}节</span>
-                        {% endif %}
-                    {% else %}
-                        <span class="text-muted">-</span>
+                <td class="text-center">
+                    {% if rec and rec.status == 'present' %}<span class="weekly-cell wc-present">✓</span>
+                    {% elif rec and rec.status == 'truant' %}<span class="weekly-cell wc-truant">旷{{ rec.period|popcount }}节</span>
+                    {% elif rec and rec.status == 'sick' %}<span class="weekly-cell wc-sick">病{{ rec.period|popcount }}节</span>
+                    {% elif rec and rec.status == 'personal' %}<span class="weekly-cell wc-personal">事{{ rec.period|popcount }}节</span>
+                    {% elif rec and rec.status == 'late' %}<span class="weekly-cell wc-late">迟{{ rec.period|popcount }}节</span>
+                    {% else %}<span class="weekly-cell wc-none">-</span>
                     {% endif %}
                 </td>
                 {% endfor %}
             </tr>
             {% else %}
-            <tr><td colspan="8" class="text-center text-muted">暂无学生</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-4">暂无学生</td></tr>
             {% endfor %}
         </tbody>
     </table>

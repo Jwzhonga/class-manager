@@ -10,6 +10,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         /* ══════════════════════════════════════════
            Apple Design System — 班级管理系统
@@ -798,7 +799,7 @@
                             {{ s.name }}
                         </button>
                     </form>
-                    <a href="#" onclick="showRenameSemester({{ s.id }},'{{ s.name }}');return false" style="color:var(--sd-footer-text);font-size:10px" title="重命名"><i class="fas fa-edit"></i></a>
+                    <a href="#" onclick="showRenameSemester({{ s.id }},{{ s.name|tojson }});return false" style="color:var(--sd-footer-text);font-size:10px" title="重命名"><i class="fas fa-edit"></i></a>
                     {% if semesters|length > 1 %}
                     <a href="#" onclick="confirmDelSemester({{ s.id }});return false" style="color:#ff6666;font-size:10px" title="删除"><i class="fas fa-times"></i></a>
                     {% endif %}
@@ -1021,6 +1022,44 @@
 
 <script src="/static/bootstrap.bundle.min.js"></script>
 <script>
+/* ── CSRF 防护（H5）：meta token + 表单自动注入 + fetch 拦截 + POST 删除助手 ── */
+function cmCsrfToken() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+}
+(function() {
+    var token = cmCsrfToken();
+    if (!token) return;
+    // 自动给所有 POST 表单注入 hidden _csrf
+    document.querySelectorAll('form[method="post"]').forEach(function(f) {
+        if (!f.querySelector('input[name="_csrf"]')) {
+            var h = document.createElement('input');
+            h.type = 'hidden'; h.name = '_csrf'; h.value = token;
+            f.appendChild(h);
+        }
+    });
+    // fetch POST 自动带 X-CSRF-Token
+    var origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+        opts = opts || {};
+        if (opts.method && String(opts.method).toUpperCase() === 'POST') {
+            opts.headers = opts.headers || {};
+            if (opts.headers instanceof Headers) { if (!opts.headers.has('X-CSRF-Token')) opts.headers.set('X-CSRF-Token', token); }
+            else if (!opts.headers['X-CSRF-Token']) opts.headers['X-CSRF-Token'] = token;
+        }
+        return origFetch(url, opts);
+    };
+})();
+function postDelete(url, msg) {
+    if (!confirm(msg || '确定删除？')) return false;
+    fetch(url, {method: 'POST', headers: {'X-CSRF-Token': cmCsrfToken()}})
+        .then(function(r) {
+            if (r.redirected || r.ok) { window.location.reload(); }
+            else { alert('删除失败（' + r.status + '），请重试'); }
+        })
+        .catch(function() { alert('删除失败，请重试'); });
+    return false;
+}
 function showNewSemester() {
     var m = new bootstrap.Modal(document.getElementById('newSemesterModal'));
     m.show();

@@ -37,7 +37,7 @@
                         <td><small class="text-muted">{{ r.notes or '' }}</small></td>
                         <td>
                             <a href="/violation/{{ r.id }}/edit" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
-                            <a href="/violation/{{ r.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除？')"><i class="fas fa-trash"></i></a>
+                            <a href="#" class="btn btn-sm btn-outline-danger" onclick="return postDelete('/violation/{{ r.id }}/delete', '确定删除？')"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     {% else %}

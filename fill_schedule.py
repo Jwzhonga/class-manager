@@ -1,5 +1,6 @@
-"""填入24新能源班课表（修正版）"""
-from app import app, db, Schedule, ScheduleImage
+"""填入24新能源班课表（修正版）— H14：按学期操作，不误清其他学期"""
+import sys
+from app import app, db, Schedule, ScheduleImage, Semester
 
 schedule_data = {
     (0, 1): ('数学', '张生武', False),
@@ -26,11 +27,26 @@ schedule_data = {
 }
 
 with app.app_context():
-    Schedule.query.delete()
-    ScheduleImage.query.delete()
+    # 目标学期：命令行参数 > 当前学期 > 第一个学期
+    sem_id = None
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        sem_id = int(sys.argv[1])
+    if sem_id is None:
+        cur = Semester.query.filter_by(is_current=True).first()
+        sem_id = cur.id if cur else None
+    if sem_id is None:
+        first = Semester.query.order_by(Semester.id).first()
+        sem_id = first.id if first else None
+    if sem_id is None:
+        print('❌ 无任何学期，请先创建学期'); sys.exit(1)
+
+    # 仅清空目标学期的课表（H14：不再清所有学期）
+    Schedule.query.filter_by(semester_id=sem_id).delete()
+    ScheduleImage.query.filter_by(semester_id=sem_id).delete()
     for (d, p), (course, teacher, is_training) in schedule_data.items():
-        s = Schedule(day_of_week=d, period=p, course_name=course, teacher=teacher, is_training=is_training)
+        s = Schedule(day_of_week=d, period=p, course_name=course,
+                     teacher=teacher, is_training=is_training, semester_id=sem_id)
         db.session.add(s)
     db.session.commit()
-    count = Schedule.query.count()
-    print(f'已填入 {count} 条课程')
+    count = Schedule.query.filter_by(semester_id=sem_id).count()
+    print(f'已向学期#{sem_id}填入 {count} 条课程')

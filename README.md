@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、教师课表、座位安排、处分管理、违纪记录、班费收支、沟通记录（家访/家校沟通/学生谈话）、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.1.0  
+**版本**: v1.1.1  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.0  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.1  
 
 ---
 
@@ -25,22 +25,51 @@ pip install -r requirements.txt
 python3 app.py
 
 # 打开浏览器访问 http://localhost:5800
-# 默认管理员: admin / admin123
+# 首次运行自动生成随机管理员密码（见 instance/admin_initial_password.txt）
 ```
 
 推荐使用 waitress 生产服务器：
 ```bash
 pip install waitress
-python3 -c "from waitress import serve; from app import app; serve(app, host='0.0.0.0', port=5800, threads=16)"
+python3 -c "from waitress import serve; from app import app; serve(app, host='0.0.0.0', port=5800, threads=4)"
 ```
 
 ## 飞牛 NAS 部署
 
-从 [Releases](https://github.com/Jwzhonga/class-manager/releases) 下载 `Classmanager.fpk`，在飞牛应用中心手动安装。安装过程自动下载 Python 依赖（清华镜像源），数据库持久化在应用数据目录，升级不丢失数据。
+从 [Releases](https://github.com/Jwzhonga/class-manager/releases) 下载 `ClassManager.fpk`，在飞牛应用中心手动安装。安装过程自动下载 Python 依赖（清华镜像源），数据库（master.db/用户库/备份）统一持久化在 `$TRIM_PKGVAR`（应用数据目录），升级不丢失数据。
+
+⚠️ **升级注意**：安装时选择与旧版**相同的卷**，避免旧数据"消失"（数据实际在旧卷的 @appdata 下）；升级后如遇问题可查看 `$TRIM_PKGVAR/startup.log` 与 `install.log`。
 
 ---
 
 # 更新日志
+
+## v1.1.1 (2026-08-16)
+
+### 🔒 安全加固（DeepSeek Harness 审计 5 严重 + 15 高 + 11 中低全修）
+- **S1 备份目录移出 static**：`static/backups` → `instance/backups`（fnOS 走 @appdata），明文库不再免登录可下载
+- **S2 任意文件删除**：所有物理文件删除统一走 `_safe_remove()`（realpath 白名单），`.db` 恢复接口加密码验证（堵住恶意库注入链）
+- **S3 多线程串库**：全局 RLock 使每个请求独占数据库引擎，彻底消除 waitress 并发下跨用户读写（200 并发实测零泄露）
+- **S4 存储型 XSS**：模板 JS 属性统一 `|tojson`（处分/座位/学期/备份名），batchWithdraw 弹窗 innerHTML 转义
+- **S5 缺依赖 500**：补 pytesseract / python-docx 依赖与友好降级提示
+- **H1 备份密钥独立**：master_user 新增 `backup_key` 随机密钥列，改密不再锁死旧备份（兼容旧备份解密）
+- **H2 日期溢出**：处分到期日月末自动 clamp（1月31日+1月不再 500）
+- **H3 身份证导入损坏**：xlrd/openpyxl 数字单元格按整数读取，18 位身份证不再被科学计数法截断
+- **H4 恢复缺表**：备份/库恢复后强制 `create_all()`，旧版备份恢复免重启
+- **H5 CSRF 防护**：自实现 token（meta + 表单自动注入 + fetch 拦截），7 条删除路由改纯 POST
+- **H6 默认密码**：不再硬编码 admin/admin123，首次运行随机密码写入 0600 权限文件
+- **H7-H14**：学期删除清理顺序、删科目跨学期误删、学生筛选跨学期、三导出学期过滤、成绩全 0 清零、课表解析失败保旧数据、删学生清物理图片、fill_schedule 按学期
+- **H15 上传校验**：PIL 魔数校验 + uuid 文件名，fake 图片不再能上传
+- **M 级**：安全响应头、SameSite=Lax、登录限流（5 次锁 5 分钟）、文件权限 0600、异常信息脱敏、gzip Vary 等
+
+### 🐛 其他修复
+- **中文文件名 .xlsx 导入损坏**（v1.1.0 遗留 bug）：临时文件保留扩展名，openpyxl 不再报格式错误
+- **考勤周视图圆角美化**：卡片化容器 + 状态胶囊配色
+
+### ⚠️ fnOS 部署注意
+- **不要加 X-Frame-Options: DENY**（v1.1.1 实测：会导致桌面图标 iframe 打不开）
+- **数据库持久化**：master.db 与用户库统一存 `$TRIM_PKGVAR`（@appdata），升级/重装不清账号；旧版 master.db（@appcenter/instance/）首次启动自动迁移
+- **升级选同卷**：安装时选择与旧版相同的卷，避免"数据不见"
 
 ## v1.1.0 (2026-08-13)
 
@@ -369,8 +398,8 @@ instance/
 ### 加密备份
 - 生成 `.cmb` 格式加密备份文件（ClassManager Backup）
 - 备份格式：`CMB1|用户ID|时间戳|schema版本号\n<加密数据>`
-- 加密方式：Fernet 对称加密，密钥从用户密码哈希派生
-- 备份文件存储于 `static/backups/` 目录
+- 加密方式：Fernet 对称加密，密钥为每用户独立的 `backup_key`（随机生成，修改密码不影响旧备份解密；旧版备份自动兼容）
+- 备份文件存储于 `instance/backups/`（fnOS 部署在 `$TRIM_PKGVAR/backups/`）
 
 ### 备份列表
 - 展示所有历史备份：文件名、文件大小、创建时间
@@ -442,7 +471,7 @@ instance/
 | 前端 | Bootstrap 5.3 + FontAwesome 6.4 |
 | 导出 | openpyxl |
 | 加密 | cryptography.fernet |
-| 生产服务器 | waitress（16线程） |
+| 生产服务器 | waitress（4线程 + 全局锁防串库） |
 | NAS 部署 | fpk 格式（fnpack 构建） |
 
 ---
@@ -452,18 +481,18 @@ instance/
 ```bash
 # 项目结构
 class-manager/
-├── app.py                 # 主应用（~5900行，含21个模型+120条路由）
+├── app.py                 # 主应用（~6100行，21个模型+120+条路由）
 ├── requirements.txt       # Python依赖
 ├── templates/             # Jinja2模板（26个html文件）
-├── static/                # 静态资源（CSS/JS/字体/图标/上传文件）
+├── static/                # 静态资源（CSS/JS/字体/图标）
 │   ├── bootstrap.min.css
 │   ├── fontawesome.min.css
 │   ├── bootstrap.bundle.min.js
 │   ├── webfonts/          # FontAwesome字体文件
-│   ├── backups/           # 备份文件存储目录
-│   └── uploads/           # 上传文件目录
-├── instance/              # 数据库文件（自动生成）
+│   └── uploads/           # 上传文件目录（fnOS 部署 symlink 到 @appdata）
+├── instance/              # 本地开发数据库（自动生成；fnOS 部署在 $TRIM_PKGVAR）
 │   ├── master.db          # 主数据库（用户登录信息）
+│   ├── backups/           # 加密备份文件
 │   └── users/             # 用户业务数据库
 └── README.md              # 本文件
 ```

@@ -312,7 +312,7 @@
                         <td style="white-space:pre-wrap;word-break:break-word;font-size:12px" data-label="住址">{{ s.address }}</td>
                         <td style="white-space:nowrap" data-label="操作">
                             <a href="/students/{{ s.id }}/edit" class="btn btn-sm btn-outline-primary" title="编辑" style="padding:2px 6px;font-size:11px"><i class="fas fa-edit"></i></a>
-                            <a href="/students/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" title="删除" onclick="return confirm('确定删除 {{ s.name }}?')" style="padding:2px 6px;font-size:11px"><i class="fas fa-trash"></i></a>
+                            <a href="#" class="btn btn-sm btn-outline-danger" title="删除" onclick="return postDelete('/students/{{ s.id }}/delete', {{ ('确定删除 ' ~ s.name ~ '?')|tojson }})" style="padding:2px 6px;font-size:11px"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     {% else %}
@@ -371,12 +371,17 @@ function confirmBatch() {
 function batchWithdraw() {
     var cbs = document.querySelectorAll('.student-checkbox:checked');
     if (cbs.length === 0) { alert('请先勾选学生'); return; }
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, function(c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
     var html = '<p>请为每位学生填写流失原因：</p>';
     cbs.forEach(function(cb) {
         var sid = cb.value;
         var name = cb.closest('tr').querySelector('td:nth-child(2)').textContent.trim();
         html += '<div class="mb-2 row align-items-center">' +
-            '<div class="col-2"><strong>' + name + '</strong></div>' +
+            '<div class="col-2"><strong>' + esc(name) + '</strong></div>' +
             '<div class="col-10"><input type="text" name="reason_' + sid + '" class="form-control form-control-sm" placeholder="流失原因"></div>' +
             '</div>';
         // Pass student ID as hidden input

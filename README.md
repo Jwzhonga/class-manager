@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、教师课表、座位安排、处分管理、违纪记录、班费收支、沟通记录（家访/家校沟通/学生谈话）、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.1.1  
+**版本**: v1.1.2  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.1  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.2  
 
 ---
 
@@ -25,7 +25,7 @@ pip install -r requirements.txt
 python3 app.py
 
 # 打开浏览器访问 http://localhost:5800
-# 首次运行自动生成随机管理员密码（见 instance/admin_initial_password.txt）
+# 默认管理员：admin / admin123（首次登录后建议修改密码；密码文件 instance/admin_initial_password.txt）
 ```
 
 推荐使用 waitress 生产服务器：
@@ -43,6 +43,19 @@ python3 -c "from waitress import serve; from app import app; serve(app, host='0.
 ---
 
 # 更新日志
+
+## v1.1.2 (2026-08-19)
+
+### 🐛 Bug 修复
+- **新建学期后导入学生提示"导入0条"**：`student_import` 两处查重（xls/xlsx）未带学期过滤，新学期名单全部撞旧学期被当重复跳过 → 改为当前学期内查重
+- **成绩导入写错学期**：`grade_import` 按姓名找学生未带学期过滤，成绩可能写入旧学期学生 → 加 `semester_id` 过滤
+- **学号重置为 STU001 造成重复**：`generate_student_id()` 取最后一条记录时可能命中 TCH_ 任课历史遗留记录 → 学号生成排除 TCH_ 前缀
+
+### ✨ 新功能
+- **新建学期可继承学生名单**：弹窗勾选后从指定学期复制学生信息（仅学生信息，不含考勤/成绩等；流失学生不继承；源学期数据不受影响）
+
+### 🔑 默认密码
+- 恢复默认管理员密码 **admin / admin123**（v1.1.1 曾改为首次运行随机密码，现按需求恢复；首次登录后建议尽快修改）
 
 ## v1.1.1 (2026-08-16)
 

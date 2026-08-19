@@ -9,3 +9,6 @@ instance/users/*.db
 .DS_Store
 static/uploads/*
 !static/uploads/.gitkeep
+
+# 数据目录（含密码文件）
+instance/

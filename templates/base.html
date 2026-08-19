@@ -890,6 +890,21 @@
                         <label class="form-label">结束日期</label>
                         <input type="date" name="end_date" class="form-control form-control-sm" required>
                     </div>
+                    <div class="mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="inherit_students" value="1" id="inheritCheck" checked onchange="document.getElementById('inheritFromWrap').style.display = this.checked ? 'block' : 'none'">
+                            <label class="form-check-label" for="inheritCheck" style="font-size:12px;font-weight:500">继承学生名单（仅学生信息，不含考勤/成绩等）</label>
+                        </div>
+                        <div id="inheritFromWrap" style="display:block" class="mt-1">
+                            <label class="form-label" style="font-size:11px;color:#86868b">从哪个学期继承（流失学生不继承）</label>
+                            {% set default_inherit = semesters | selectattr('student_count') | first %}
+                            <select name="inherit_from" class="form-select form-control-sm">
+                                {% for s in semesters %}
+                                <option value="{{ s.id }}"{% if default_inherit and s.id == default_inherit.id %} selected{% endif %}>{{ s.name }}{% if s.student_count %}（{{ s.student_count }}人）{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>

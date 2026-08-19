@@ -395,6 +395,11 @@ def inject_semester():
     if request.endpoint in PUBLIC_ROUTES:
         return dict(semesters=[], current_semester=None)
     semesters = Semester.query.order_by(Semester.start_date.desc()).all()
+    # v1.1.2：附加可继承学生数（不含流失），供新建学期继承下拉展示
+    for s in semesters:
+        s.student_count = Student.query.filter(
+            Student.semester_id == s.id,
+            Student.status != 'withdrawn').count()
     current = Semester.query.filter_by(is_current=True).first()
     if not current and semesters:
         current = semesters[0]
@@ -939,7 +944,7 @@ with app.app_context():
 
 def generate_student_id():
     """自动生成学号 STU001, STU002 ..."""
-    last = Student.query.order_by(Student.id.desc()).first()
+    last = Student.query.filter(~Student.student_id.startswith('TCH_')).order_by(Student.id.desc()).first()
     if last and last.student_id and last.student_id.startswith('STU'):
         try:
             num = int(last.student_id[3:]) + 1
@@ -1186,6 +1191,47 @@ def semester_add():
             db.session.add(s)
             db.session.commit()
             session['semester_id'] = s.id
+            # ── v1.1.2：继承学期学生（仅复制 Student 表，源学期数据不受影响）──
+            # 独立 try：继承失败不影响学期创建结果提示
+            if request.form.get('inherit_students') == '1':
+                try:
+                    src_id = request.form.get('inherit_from', type=int)
+                    if not src_id:
+                        # 默认取最近的有学生的学期（跳过空学期）
+                        prev = Student.query.with_entities(Student.semester_id).filter(
+                            Student.semester_id != s.id,
+                            Student.semester_id.isnot(None),
+                            Student.status != 'withdrawn').order_by(Student.semester_id.desc()).first()
+                        src_id = prev[0] if prev else None
+                    if src_id:
+                        from_sem = db.session.get(Semester, src_id)
+                        copied = skipped = 0
+                        for old in Student.query.filter_by(semester_id=src_id).all():
+                            if old.status == 'withdrawn':
+                                continue  # 流失学生不继承
+                            if old.student_id and old.student_id.startswith('TCH_'):
+                                continue  # 任课历史遗留记录不继承
+                            # 新学期内查重：同名+同身份证（与导入逻辑一致）
+                            dup = Student.query.filter_by(
+                                name=old.name, id_card=old.id_card or '', semester_id=s.id).first()
+                            if dup:
+                                skipped += 1
+                                continue
+                            new = Student()
+                            for col in Student.__table__.columns:
+                                if col.name in ('id', 'semester_id', 'created_at'):
+                                    continue
+                                setattr(new, col.name, getattr(old, col.name))
+                            new.semester_id = s.id
+                            db.session.add(new)
+                            copied += 1
+                        db.session.commit()
+                        if from_sem:
+                            flash(f'已从「{from_sem.name}」继承 {copied} 名学生'
+                                  + (f'，跳过 {skipped} 名重复' if skipped else ''))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'继承学生失败: {_safe_err(e)}')
             flash(f'学期「{name}」已创建')
         except Exception:
             flash('日期格式错误')
@@ -1740,8 +1786,8 @@ def student_import():
                 stu_id = _xlrd_cell_str(sheet, r, 30) if sheet.ncols > 30 else ''
                 if not stu_id:
                     stu_id = _xlrd_cell_str(sheet, r, 3).upper()
-                # 跨学期查重：同名+同身份证 在任何学期存在即跳过
-                dup = Student.query.filter_by(name=name, id_card=stu_id).first()
+                # 当前学期内查重：同名+同身份证
+                dup = Student.query.filter_by(name=name, id_card=stu_id, semester_id=sem_id).first()
                 if dup:
                     continue
                 student = Student(
@@ -1781,7 +1827,7 @@ def student_import():
                     stu_id = _cell_str(row[30])
                 elif len(row) > 3 and row[3]:
                     stu_id = _cell_str(row[3]).upper()
-                if Student.query.filter_by(name=name, id_card=stu_id).first():
+                if Student.query.filter_by(name=name, id_card=stu_id, semester_id=sem_id).first():
                     continue
                 student = Student(
                     name=name, student_id=generate_student_id(),
@@ -3408,7 +3454,7 @@ def grade_import():
             if not row or not row[1]:
                 continue
             name = str(row[1]).strip()
-            student = Student.query.filter_by(name=name).first()
+            student = Student.query.filter_by(name=name, semester_id=get_current_semester_id()).first()
             if not student:
                 continue
             
@@ -6090,9 +6136,9 @@ if __name__ == '__main__':
             _do_migration(old_db_path)
             print('✅ 旧数据库数据已迁移完成')
 
-        # ── 第3步：创建默认管理员（首次运行）── H6：随机密码，不再硬编码 admin123
+        # ── 第3步：创建默认管理员（首次运行）── 默认密码 admin123
         if not MasterUser.query.filter_by(username='admin').first():
-            admin_password = uuid.uuid4().hex[:10]
+            admin_password = 'admin123'
             admin = MasterUser(username='admin')
             admin.set_password(admin_password)
             db.session.add(admin)

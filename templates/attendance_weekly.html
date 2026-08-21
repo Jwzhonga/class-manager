@@ -68,7 +68,7 @@
         {% if week_offset != 0 %}<a href="/attendance/weekly" class="btn btn-sm btn-outline-secondary">本周</a>{% endif %}
         <a href="/attendance/weekly?offset={{ week_offset+1 }}" class="btn btn-sm btn-outline-secondary">下一周 <i class="fas fa-chevron-right"></i></a>
     </div>
-    <span class="text-muted small">第{{ monday.isocalendar()[1] }}周（{{ monday }} ~ {{ sunday }}）</span>
+    <span class="text-muted small">{{ week_label }}（{{ monday }} ~ {{ sunday }}）</span>
     <div class="d-flex flex-wrap gap-1">
         <a href="/attendance" class="btn btn-sm btn-outline-primary"><i class="fas fa-list"></i> 日考勤</a>
         <a href="/attendance/stats" class="btn btn-sm btn-outline-info"><i class="fas fa-chart-bar"></i> 统计</a>

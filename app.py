@@ -3051,6 +3051,33 @@ def attendance_stats():
                           total_students=total_students)
 
 
+def _is_spring_semester(sem):
+    """判断春季学期（第2学期）：优先看名称，名称无法识别时按开学月份（1-6月=春季）"""
+    name = sem.name or ''
+    return '第2学期' in name or ('第1学期' not in name and sem.start_date.month <= 6)
+
+
+def _week_label(monday, sunday, semesters):
+    """考勤周视图周标签：
+    周与某学期时间重叠 → 该学期第N周（开学那周=第1周）；
+    不在任何学期内 → 按最近的前一个学期判断假期（第1学期后=寒假/前=暑假，第2学期反之）
+    """
+    if not semesters:
+        return f'第{monday.isocalendar()[1]}周'  # 无学期：ISO 周兜底
+    for sem in semesters:  # 按 start_date 升序，取第一个与当前周重叠的学期
+        if sunday >= sem.start_date and monday <= sem.end_date:
+            sem_monday = sem.start_date - timedelta(days=sem.start_date.weekday())
+            return f'第{(monday - sem_monday).days // 7 + 1}周'
+    prev = None
+    for sem in semesters:
+        if sem.end_date < monday:
+            prev = sem
+    if prev:
+        return '暑假' if _is_spring_semester(prev) else '寒假'
+    # 在所有学期之前：由第一个学期决定
+    return '寒假' if _is_spring_semester(semesters[0]) else '暑假'
+
+
 @app.route('/attendance/weekly')
 def attendance_weekly():
     today = date.today()
@@ -3058,7 +3085,11 @@ def attendance_weekly():
     monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
     sunday = monday + timedelta(days=6)
     sem_id = get_current_semester_id()
-    
+
+    # 周标签：基于全部学期匹配（不只看当前选中的学期）
+    semesters = Semester.query.order_by(Semester.start_date).all()
+    week_label = _week_label(monday, sunday, semesters)
+
     week_dates = [monday + timedelta(days=i) for i in range(7)]
     week_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     
@@ -3075,7 +3106,8 @@ def attendance_weekly():
     
     return render_template('attendance_weekly.html', students=week_data,
                           week_dates=week_dates, week_names=week_names,
-                          monday=monday, sunday=sunday, week_offset=week_offset)
+                          monday=monday, sunday=sunday, week_offset=week_offset,
+                          week_label=week_label)
 
 # ══════════════════════════════════════════════
 # 违纪记录

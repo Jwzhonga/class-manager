@@ -2,10 +2,10 @@
 
 中职班级综合管理 Web 系统，用于班主任日常管理工作。涵盖学生信息管理、每日考勤、成绩分析、实训记录、班级课表、教师课表、座位安排、处分管理、违纪记录、班费收支、沟通记录（家访/家校沟通/学生谈话）、学期管理等核心功能。支持多用户独立数据库，所有数据本地存储，无需联网。
 
-**版本**: v1.1.2  
+**版本**: v1.1.3  
 **作者**: 万钟  
 **源码**: https://github.com/Jwzhonga/class-manager  
-**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.2  
+**下载**: https://github.com/Jwzhonga/class-manager/releases/tag/v1.1.3  
 
 ---
 
@@ -43,6 +43,11 @@ python3 -c "from waitress import serve; from app import app; serve(app, host='0.
 ---
 
 # 更新日志
+
+## v1.1.3 (2026-08-21)
+
+### 🐛 Bug 修复
+- **考勤周视图周次显示错误**：原显示 ISO 自然年周数（如 8 月开学前显示\"第34周\"），与学期无关 → 改为学期周次：学期内显示\"第N周\"（开学那周=第1周），学期外按学期类型显示\"暑假/寒假\"
 
 ## v1.1.2 (2026-08-19)
 
